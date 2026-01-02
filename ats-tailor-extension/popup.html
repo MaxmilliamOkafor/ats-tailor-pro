@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATS Tailor Pro</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo">
+        <img src="icons/icon48.png" alt="ATS Tailor Pro" class="logo-icon">
+        <div class="logo-text">
+          <h1>ATS Tailor Pro</h1>
+          <span class="tagline">Lightning-fast CV & Cover Letter</span>
+        </div>
+      </div>
+      <div class="status-indicator" id="statusIndicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Ready</span>
+      </div>
+    </header>
+
+    <!-- Mode Selector -->
+    <section id="modeSection" class="section">
+      <div class="mode-tabs">
+        <button id="standaloneTab" class="mode-tab active" data-mode="standalone">
+          🔑 Standalone
+        </button>
+        <button id="connectedTab" class="mode-tab" data-mode="connected">
+          🌐 QuantumHire
+        </button>
+      </div>
+    </section>
+
+    <!-- Standalone Mode - API Key Setup -->
+    <section id="apiKeySection" class="section">
+      <div class="card api-key-card">
+        <h3>🔐 OpenAI API Key</h3>
+        <p class="help-text">Your key is stored securely and never shared.</p>
+        
+        <div class="input-group">
+          <div class="api-key-input-wrapper">
+            <input type="password" id="apiKeyInput" placeholder="sk-..." autocomplete="off">
+            <button type="button" id="toggleKeyVisibility" class="btn-icon-toggle" title="Toggle visibility">
+              👁️
+            </button>
+          </div>
+        </div>
+        
+        <div class="api-key-actions">
+          <button id="saveApiKeyBtn" class="btn btn-primary">Save Key</button>
+          <span id="apiKeyStatus" class="api-key-status"></span>
+        </div>
+        
+        <p class="api-key-help">
+          <a href="https://platform.openai.com/api-keys" target="_blank">Get your API key →</a>
+        </p>
+      </div>
+    </section>
+
+    <!-- Login Section (Connected Mode) -->
+    <section id="loginSection" class="section hidden">
+      <div class="login-card">
+        <h2>🔐 Sign In</h2>
+        <p class="login-subtitle">Use your QuantumHire account</p>
+        <div class="input-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="your@email.com" autocomplete="email">
+        </div>
+        <div class="input-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+        </div>
+        <button id="loginBtn" class="btn btn-primary btn-large">Sign In</button>
+      </div>
+    </section>
+
+    <!-- Main Section -->
+    <section id="mainSection" class="section">
+      <!-- User Info (Connected Mode) -->
+      <div class="user-bar hidden" id="userBar">
+        <span id="userEmail" class="user-email"></span>
+        <button id="logoutBtn" class="btn-link">Logout</button>
+      </div>
+
+      <!-- Profile Setup (Standalone Mode) -->
+      <div class="card profile-card" id="profileCard">
+        <div class="card-header">
+          <h3>👤 Quick Profile</h3>
+          <button id="toggleProfile" class="btn-link">Edit</button>
+        </div>
+        <div id="profileSummary" class="profile-summary">
+          <span id="profileName">Not configured</span>
+        </div>
+        <div id="profileForm" class="profile-form hidden">
+          <div class="input-row">
+            <input type="text" id="firstName" placeholder="First Name" class="input-half">
+            <input type="text" id="lastName" placeholder="Last Name" class="input-half">
+          </div>
+          <input type="email" id="profileEmail" placeholder="Email">
+          <input type="tel" id="phone" placeholder="Phone">
+          <input type="url" id="linkedin" placeholder="LinkedIn URL">
+          <input type="text" id="city" placeholder="City">
+          <textarea id="skills" placeholder="Skills (comma separated)" rows="2"></textarea>
+          <textarea id="experience" placeholder="Brief work experience summary" rows="3"></textarea>
+          <button id="saveProfileBtn" class="btn btn-secondary">Save Profile</button>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="mini-settings">
+        <label class="toggle-row" for="autoTailorToggle">
+          <span class="toggle-label">Automatic ATS tailor</span>
+          <input type="checkbox" id="autoTailorToggle" />
+        </label>
+        <p class="toggle-help">Runs once per job when upload fields detected.</p>
+      </div>
+
+      <!-- Job Detection -->
+      <div class="job-card" id="jobCard">
+        <div class="job-header">
+          <span class="job-label">Detected Job</span>
+          <button id="refreshJob" class="btn-icon" title="Refresh">🔄</button>
+        </div>
+        <h3 id="jobTitle" class="job-title">Scanning page...</h3>
+        <p id="jobCompany" class="job-company"></p>
+        <p id="jobLocation" class="job-location"></p>
+        <span id="noJobBadge" class="no-job-badge hidden">No job detected</span>
+      </div>
+
+      <!-- AI Keyword Extraction -->
+      <div class="actions-card">
+        <button id="aiExtractBtn" class="btn btn-secondary btn-large">
+          <span class="btn-icon-left">🤖</span>
+          <span class="btn-text">AI Extract Keywords</span>
+        </button>
+
+        <div id="keywordsCard" class="keywords-card hidden">
+          <h4>📊 Extracted Keywords</h4>
+          <div class="keywords-grid">
+            <div class="keyword-group">
+              <span class="keyword-label">Required Skills</span>
+              <div id="requiredSkills" class="keyword-chips"></div>
+            </div>
+            <div class="keyword-group">
+              <span class="keyword-label">Preferred Skills</span>
+              <div id="preferredSkills" class="keyword-chips"></div>
+            </div>
+            <div class="keyword-group">
+              <span class="keyword-label">Tools & Technologies</span>
+              <div id="techTools" class="keyword-chips"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tailor Actions -->
+      <div class="actions-card">
+        <button id="tailorBtn" class="btn btn-primary btn-large">
+          <span class="btn-icon-left">⚡</span>
+          <span class="btn-text">Tailor CV & Cover Letter</span>
+          <span class="btn-time">~5s</span>
+        </button>
+
+        <div class="progress-container hidden" id="progressContainer">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="progress-text" id="progressText">Initializing...</p>
+        </div>
+      </div>
+
+      <!-- Generated Documents -->
+      <div class="documents-card hidden" id="documentsCard">
+        <!-- ATS Match Score -->
+        <div class="ats-match-section" id="atsMatchSection">
+          <div class="ats-match-header">
+            <span class="ats-label">ATS Match</span>
+            <span class="ats-score" id="atsMatchScore">0%</span>
+          </div>
+          <div class="ats-keywords" id="atsKeywords">
+            <div class="keywords-matched" id="matchedKeywords"></div>
+            <div class="keywords-missing" id="missingKeywords"></div>
+          </div>
+        </div>
+
+        <h3>📄 Generated Documents</h3>
+
+        <!-- Document List -->
+        <div class="document-item" id="cvDocument">
+          <div class="document-info">
+            <span class="document-icon">📋</span>
+            <div class="document-details">
+              <span class="document-name" id="cvFileName">Tailored CV</span>
+              <span class="document-size" id="cvSize"></span>
+            </div>
+          </div>
+          <div class="document-actions">
+            <button id="downloadCv" class="btn btn-small btn-icon-only" title="Download">⬇️</button>
+          </div>
+        </div>
+
+        <div class="document-item" id="coverDocument">
+          <div class="document-info">
+            <span class="document-icon">✉️</span>
+            <div class="document-details">
+              <span class="document-name" id="coverFileName">Cover Letter</span>
+              <span class="document-size" id="coverSize"></span>
+            </div>
+          </div>
+          <div class="document-actions">
+            <button id="downloadCover" class="btn btn-small btn-icon-only" title="Download">⬇️</button>
+          </div>
+        </div>
+
+        <!-- Preview Tabs -->
+        <div class="preview-tabs">
+          <button id="previewCvTab" class="preview-tab active">Resume</button>
+          <button id="previewCoverTab" class="preview-tab">Cover Letter</button>
+        </div>
+
+        <!-- Preview Content -->
+        <div class="preview-content-wrapper">
+          <div id="previewContent" class="preview-content placeholder">Generated content will appear here...</div>
+        </div>
+
+        <!-- Actions -->
+        <div class="document-buttons">
+          <button id="copyContent" class="btn btn-secondary">
+            <span class="btn-icon-left">📋</span> Copy
+          </button>
+          <button id="downloadBothBtn" class="btn btn-success">
+            <span class="btn-icon-left">📥</span> Download Both
+          </button>
+        </div>
+
+        <button id="attachBoth" class="btn btn-success btn-large">
+          <span class="btn-icon-left">📎</span>
+          Attach Both to Application
+        </button>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="stats-card">
+        <div class="stat">
+          <span class="stat-value" id="todayCount">0</span>
+          <span class="stat-label">Today</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="totalCount">0</span>
+          <span class="stat-label">Total</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="avgTime">0s</span>
+          <span class="stat-label">Avg Time</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="version">v2.0.0</span>
+      <span class="separator">|</span>
+      <span id="modeIndicator" class="mode-indicator">Standalone Mode</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
