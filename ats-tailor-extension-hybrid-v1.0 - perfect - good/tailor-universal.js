@@ -9,9 +9,14 @@
   const CONFIG = {
     TARGET_SCORE: 95,
     MAX_KEYWORDS_SUMMARY: 8,
-    MAX_KEYWORDS_EXPERIENCE: 20,
+    MAX_KEYWORDS_EXPERIENCE: 25, // Increased for better keyword density
     MAX_KEYWORDS_SKILLS: 15,
-    YIELD_INTERVAL: 5
+    YIELD_INTERVAL: 5,
+    // NEW: Target keyword repetition for high/medium priority keywords
+    HIGH_PRIORITY_MIN_COUNT: 3,    // Repeat high-priority keywords 3-5 times
+    HIGH_PRIORITY_MAX_COUNT: 5,
+    MEDIUM_PRIORITY_MIN_COUNT: 2,  // Repeat medium-priority keywords 2-3 times
+    MEDIUM_PRIORITY_MAX_COUNT: 3
   };
 
   // ============ SOFT SKILLS TO EXCLUDE ============
@@ -243,8 +248,9 @@
 
   /**
    * SMART experience enhancement - places keywords in RELEVANT bullet points
+   * ENHANCED: Injects high-priority keywords 3-5 times, medium-priority 2-3 times
    */
-  function enhanceExperience(experience, keywords) {
+  function enhanceExperience(experience, keywords, priorityInfo = null) {
     if (!experience || !keywords || keywords.length === 0) {
       return { enhanced: experience || '', injected: [] };
     }
@@ -252,70 +258,169 @@
     const injected = [];
     const experienceLower = experience.toLowerCase();
     
-    // Get missing keywords and categorize them
-    const missingKeywords = keywords.filter(kw => 
-      !new RegExp(`\\b${escapeRegex(kw)}\\b`, 'i').test(experienceLower)
-    ).slice(0, CONFIG.MAX_KEYWORDS_EXPERIENCE);
+    // Track keyword usage counts for repetition targeting
+    const keywordUsageCount = new Map();
+    
+    // Determine priority for each keyword
+    const highPrioritySet = new Set((priorityInfo?.highPriority || []).map(k => k.toLowerCase()));
+    const mediumPrioritySet = new Set((priorityInfo?.mediumPriority || []).map(k => k.toLowerCase()));
+    
+    // Get target count for each keyword based on priority
+    const getTargetCount = (keyword) => {
+      const kwLower = keyword.toLowerCase();
+      if (highPrioritySet.has(kwLower)) {
+        return CONFIG.HIGH_PRIORITY_MIN_COUNT; // Target 3-5 occurrences
+      } else if (mediumPrioritySet.has(kwLower)) {
+        return CONFIG.MEDIUM_PRIORITY_MIN_COUNT; // Target 2-3 occurrences
+      }
+      return 1; // Low priority: 1 occurrence is enough
+    };
+    
+    // Count existing keyword occurrences in experience
+    keywords.forEach(kw => {
+      const regex = new RegExp(`\\b${escapeRegex(kw)}\\b`, 'gi');
+      const matches = experienceLower.match(regex);
+      keywordUsageCount.set(kw, matches ? matches.length : 0);
+    });
+    
+    // Get keywords that need more occurrences
+    const keywordsNeedingMore = keywords.filter(kw => {
+      const current = keywordUsageCount.get(kw) || 0;
+      const target = getTargetCount(kw);
+      return current < target;
+    }).slice(0, CONFIG.MAX_KEYWORDS_EXPERIENCE);
 
-    if (missingKeywords.length === 0) {
+    if (keywordsNeedingMore.length === 0) {
       return { enhanced: experience, injected: [] };
     }
 
     // Categorize keywords by their relevant contexts
-    const keywordContexts = categorizeKeywords(missingKeywords);
+    const keywordContexts = categorizeKeywords(keywordsNeedingMore);
     
     // Split into lines
     const lines = experience.split('\n');
     const bulletPattern = /^(\s*[-•●○◦▪▸►]\s*)(.+)$/;
-    const usedKeywords = new Set();
+    const usedInBullet = new Map(); // Track which bullet each keyword was used in
 
-    const enhancedLines = lines.map(line => {
+    const enhancedLines = lines.map((line, lineIndex) => {
       const match = line.match(bulletPattern);
       if (!match) return line;
       
       const bulletPrefix = match[1];
-      const bulletText = match[2];
+      let bulletText = match[2];
       const bulletLower = bulletText.toLowerCase();
       
-      // Find the best matching keyword for this bullet
+      // Find keywords that match this bullet's context
       for (const [keyword, contexts] of Object.entries(keywordContexts)) {
-        if (usedKeywords.has(keyword)) continue;
+        const currentCount = keywordUsageCount.get(keyword) || 0;
+        const targetCount = getTargetCount(keyword);
+        
+        // Skip if we've hit the max count for this keyword
+        if (currentCount >= CONFIG.HIGH_PRIORITY_MAX_COUNT) continue;
         if (injected.length >= CONFIG.MAX_KEYWORDS_EXPERIENCE) continue;
+        
+        // Check if keyword is already in this specific bullet
+        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletLower)) {
+          continue;
+        }
         
         // Check if this bullet matches any of the keyword's contexts
         const hasContextMatch = contexts.some(ctx => bulletLower.includes(ctx));
         
-        if (hasContextMatch) {
-          // Check if keyword already in this bullet
-          if (!new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletLower)) {
-            usedKeywords.add(keyword);
-            injected.push(keyword);
-            return injectKeywordNaturally(bulletPrefix, bulletText, keyword);
+        if (hasContextMatch && currentCount < targetCount) {
+          // Inject keyword naturally
+          const enhanced = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
+          bulletText = enhanced.replace(bulletPrefix, '');
+          
+          // Update tracking
+          keywordUsageCount.set(keyword, currentCount + 1);
+          injected.push(keyword);
+          
+          // Track which bullet got this keyword
+          if (!usedInBullet.has(keyword)) {
+            usedInBullet.set(keyword, []);
+          }
+          usedInBullet.get(keyword).push(lineIndex);
+          
+          // For high-priority keywords, try to add more than once
+          if (highPrioritySet.has(keyword.toLowerCase()) && currentCount + 1 < CONFIG.HIGH_PRIORITY_MIN_COUNT) {
+            continue; // Will try again in another bullet
           }
         }
       }
       
-      return line;
+      return bulletPrefix + bulletText;
     });
 
-    // If we still have missing keywords, do a second pass with looser matching
-    if (injected.length < Math.min(missingKeywords.length, CONFIG.MAX_KEYWORDS_EXPERIENCE / 2)) {
-      const remainingKeywords = missingKeywords.filter(kw => !usedKeywords.has(kw));
-      let keywordIndex = 0;
+    // SECOND PASS: Ensure high-priority keywords appear at least 3 times
+    const highPriorityKeywords = keywordsNeedingMore.filter(kw => highPrioritySet.has(kw.toLowerCase()));
+    
+    for (const keyword of highPriorityKeywords) {
+      const currentCount = keywordUsageCount.get(keyword) || 0;
+      const targetCount = CONFIG.HIGH_PRIORITY_MIN_COUNT;
       
-      for (let i = 0; i < enhancedLines.length && keywordIndex < remainingKeywords.length; i++) {
+      if (currentCount >= targetCount) continue;
+      
+      const neededMore = targetCount - currentCount;
+      let addedCount = 0;
+      
+      // Find suitable bullets to add this keyword
+      for (let i = 0; i < enhancedLines.length && addedCount < neededMore; i++) {
         const match = enhancedLines[i].match(bulletPattern);
         if (!match) continue;
         
         const bulletPrefix = match[1];
         const bulletText = match[2];
-        const keyword = remainingKeywords[keywordIndex];
+        const bulletLower = bulletText.toLowerCase();
         
-        if (!new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletText.toLowerCase())) {
-          enhancedLines[i] = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
-          injected.push(keyword);
-          keywordIndex++;
+        // Skip if keyword already in this bullet
+        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletLower)) {
+          continue;
         }
+        
+        // Skip very short bullets
+        if (bulletText.length < 30) continue;
+        
+        // Inject keyword
+        enhancedLines[i] = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
+        keywordUsageCount.set(keyword, (keywordUsageCount.get(keyword) || 0) + 1);
+        injected.push(keyword);
+        addedCount++;
+      }
+    }
+
+    // THIRD PASS: Ensure medium-priority keywords appear at least 2 times
+    const mediumPriorityKeywords = keywordsNeedingMore.filter(kw => mediumPrioritySet.has(kw.toLowerCase()));
+    
+    for (const keyword of mediumPriorityKeywords) {
+      const currentCount = keywordUsageCount.get(keyword) || 0;
+      const targetCount = CONFIG.MEDIUM_PRIORITY_MIN_COUNT;
+      
+      if (currentCount >= targetCount) continue;
+      
+      const neededMore = targetCount - currentCount;
+      let addedCount = 0;
+      
+      for (let i = 0; i < enhancedLines.length && addedCount < neededMore; i++) {
+        const match = enhancedLines[i].match(bulletPattern);
+        if (!match) continue;
+        
+        const bulletPrefix = match[1];
+        const bulletText = match[2];
+        const bulletLower = bulletText.toLowerCase();
+        
+        // Skip if keyword already in this bullet
+        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletLower)) {
+          continue;
+        }
+        
+        // Skip very short bullets
+        if (bulletText.length < 30) continue;
+        
+        enhancedLines[i] = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
+        keywordUsageCount.set(keyword, (keywordUsageCount.get(keyword) || 0) + 1);
+        injected.push(keyword);
+        addedCount++;
       }
     }
 
@@ -444,9 +549,16 @@
       ...(keywords.highPriority || []).filter(k => !allInjected.includes(k)),
       ...(keywords.mediumPriority || []),
     ];
+    // NEW: Pass priority info for keyword repetition targeting (3-5x high, 2-3x medium)
+    const priorityInfo = {
+      highPriority: keywords.highPriority || [],
+      mediumPriority: keywords.mediumPriority || [],
+      lowPriority: keywords.lowPriority || []
+    };
     const experienceResult = enhanceExperience(
       parsed.sections.experience || '',
-      experienceKeywords.filter(k => !allInjected.includes(k))
+      experienceKeywords.filter(k => !allInjected.includes(k)),
+      priorityInfo
     );
     enhancedSections.experience = experienceResult.enhanced;
     stats.experience = experienceResult.injected.length;
