@@ -2065,25 +2065,17 @@ class ATSTailor {
     this.showToast('Attaching documents...', 'success');
     
     try {
-      // PARALLEL: Attach both documents simultaneously for 40% speed boost
-      const [cvResult, coverResult] = await Promise.all([
-        this.attachDocument('cv').catch(e => ({ error: e.message })),
-        new Promise(r => setTimeout(r, 100)).then(() => this.attachDocument('cover').catch(e => ({ error: e.message })))
-      ]);
+      // SEQUENTIAL ATTACH: Same proven method as ats-tailor-extension both attach
+      // Step 1: Attach CV first
+      await this.attachDocument('cv');
       
-      // Check results
-      const cvOk = !cvResult?.error;
-      const coverOk = !coverResult?.error;
+      // Step 2: Wait 500ms for UI to settle (prevents race conditions)
+      await new Promise(r => setTimeout(r, 500));
       
-      if (cvOk && coverOk) {
-        this.showToast('Both documents attached!', 'success');
-      } else if (cvOk) {
-        this.showToast('CV attached, cover letter field not found', 'success');
-      } else if (coverOk) {
-        this.showToast('Cover letter attached, CV field not found', 'success');
-      } else {
-        this.showToast('Could not find file upload fields', 'error');
-      }
+      // Step 3: Attach Cover Letter
+      await this.attachDocument('cover');
+      
+      this.showToast('Both documents attached!', 'success');
     } catch (error) {
       console.error('[ATS Tailor] attachBothDocuments error:', error);
       this.showToast(error.message || 'Failed to attach documents', 'error');
