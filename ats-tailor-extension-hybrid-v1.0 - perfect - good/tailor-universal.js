@@ -168,7 +168,8 @@
   }
 
   /**
-   * Inject keyword naturally into a bullet point
+   * FIXED: Inject keyword ALWAYS - guaranteed injection into bullet points
+   * Strategy: Multiple fallback methods to ensure keyword appears in text
    */
   function injectKeywordNaturally(bulletPrefix, bulletText, keyword) {
     const text = bulletText.trim();
@@ -179,36 +180,46 @@
       return bulletPrefix + text;
     }
     
-    // Strategy 1: Insert after action verb at the start
-    const actionVerbMatch = text.match(/^(Led|Developed|Built|Created|Managed|Implemented|Designed|Architected|Engineered|Delivered|Owned|Integrated|Automated|Optimized)\s+/i);
-    if (actionVerbMatch) {
-      const afterVerb = text.slice(actionVerbMatch[0].length);
-      return `${bulletPrefix}${actionVerbMatch[0]}${keyword}-based ${afterVerb}`;
-    }
-    
-    // Strategy 2: Find a natural insertion point (after "using", "with", "in")
-    const insertionPatterns = [
-      { pattern: /(using|with|in|via|through)\s+([A-Za-z]+)/i, position: 'after' },
-      { pattern: /(,)\s*([a-z])/i, position: 'before' },
+    // Natural injection phrases - varied for readability
+    const phrases = [
+      'leveraging', 'utilizing', 'implementing', 'applying', 'using',
+      'through', 'incorporating', 'via', 'with', 'employing'
     ];
+    const getPhrase = () => phrases[Math.floor(Math.random() * phrases.length)];
     
-    for (const { pattern, position } of insertionPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const idx = match.index + (position === 'after' ? match[0].length : match[1].length);
-        const before = text.slice(0, idx);
-        const after = text.slice(idx);
-        return `${bulletPrefix}${before} ${keyword},${after}`;
-      }
+    // Strategy 1: Insert after action verb (most natural)
+    const actionVerbMatch = text.match(/^(Led|Developed|Built|Created|Managed|Implemented|Designed|Architected|Engineered|Delivered|Owned|Integrated|Automated|Optimized|Spearheaded|Directed|Shaped|Drove|Reduced|Increased|Improved|Achieved)\s+/i);
+    if (actionVerbMatch) {
+      const verb = actionVerbMatch[0];
+      const rest = text.slice(verb.length);
+      // Insert keyword right after verb as a descriptor
+      return `${bulletPrefix}${verb}${keyword} ${rest}`;
     }
     
-    // Strategy 3: Append before the period
+    // Strategy 2: Insert after first clause (before comma)
+    const firstComma = text.indexOf(',');
+    if (firstComma > 15 && firstComma < text.length * 0.6) {
+      const before = text.slice(0, firstComma);
+      const after = text.slice(firstComma);
+      return `${bulletPrefix}${before} ${getPhrase()} ${keyword}${after}`;
+    }
+    
+    // Strategy 3: Insert after "using", "with", "in", "via", "through", etc.
+    const insertionMatch = text.match(/(using|with|in|via|through|on|for|by)\s+/i);
+    if (insertionMatch) {
+      const idx = insertionMatch.index + insertionMatch[0].length;
+      const before = text.slice(0, idx);
+      const after = text.slice(idx);
+      return `${bulletPrefix}${before}${keyword}, ${after}`;
+    }
+    
+    // Strategy 4: Insert before period at end
     if (text.endsWith('.')) {
-      return `${bulletPrefix}${text.slice(0, -1)} utilizing ${keyword}.`;
+      return `${bulletPrefix}${text.slice(0, -1)}, ${getPhrase()} ${keyword}.`;
     }
     
-    // Strategy 4: Just append
-    return `${bulletPrefix}${text}, leveraging ${keyword}`;
+    // Strategy 5: GUARANTEED - just append to end
+    return `${bulletPrefix}${text}, ${getPhrase()} ${keyword}`;
   }
 
   // ============ KEYWORD INJECTION ============
@@ -247,8 +258,9 @@
   }
 
   /**
-   * SMART experience enhancement - places keywords in RELEVANT bullet points
-   * ENHANCED: Injects high-priority keywords 3-5 times, medium-priority 2-3 times
+   * AGGRESSIVE experience enhancement - GUARANTEES all keywords are injected
+   * High-priority: 3-5 times, Medium-priority: 2-3 times, Low: at least 1 time
+   * NO CONTEXT MATCHING - just inject into suitable bullets
    */
   function enhanceExperience(experience, keywords, priorityInfo = null) {
     if (!experience || !keywords || keywords.length === 0) {
@@ -256,7 +268,7 @@
     }
 
     const injected = [];
-    const experienceLower = experience.toLowerCase();
+    let experienceText = experience;
     
     // Track keyword usage counts for repetition targeting
     const keywordUsageCount = new Map();
@@ -277,154 +289,145 @@
     };
     
     // Count existing keyword occurrences in experience
+    const experienceLower = experience.toLowerCase();
     keywords.forEach(kw => {
       const regex = new RegExp(`\\b${escapeRegex(kw)}\\b`, 'gi');
       const matches = experienceLower.match(regex);
       keywordUsageCount.set(kw, matches ? matches.length : 0);
     });
     
-    // Get keywords that need more occurrences
+    // Get ALL keywords that need injection (no limit)
     const keywordsNeedingMore = keywords.filter(kw => {
       const current = keywordUsageCount.get(kw) || 0;
       const target = getTargetCount(kw);
       return current < target;
-    }).slice(0, CONFIG.MAX_KEYWORDS_EXPERIENCE);
+    });
 
     if (keywordsNeedingMore.length === 0) {
       return { enhanced: experience, injected: [] };
     }
 
-    // Categorize keywords by their relevant contexts
-    const keywordContexts = categorizeKeywords(keywordsNeedingMore);
+    console.log('[TailorUniversal] Keywords needing injection:', keywordsNeedingMore.length);
     
-    // Split into lines
-    const lines = experience.split('\n');
+    // Split into lines and find all bullets
+    const lines = experienceText.split('\n');
     const bulletPattern = /^(\s*[-•●○◦▪▸►]\s*)(.+)$/;
-    const usedInBullet = new Map(); // Track which bullet each keyword was used in
-
-    const enhancedLines = lines.map((line, lineIndex) => {
-      const match = line.match(bulletPattern);
-      if (!match) return line;
-      
-      const bulletPrefix = match[1];
-      let bulletText = match[2];
-      const bulletLower = bulletText.toLowerCase();
-      
-      // Find keywords that match this bullet's context
-      for (const [keyword, contexts] of Object.entries(keywordContexts)) {
-        const currentCount = keywordUsageCount.get(keyword) || 0;
-        const targetCount = getTargetCount(keyword);
-        
-        // Skip if we've hit the max count for this keyword
-        if (currentCount >= CONFIG.HIGH_PRIORITY_MAX_COUNT) continue;
-        if (injected.length >= CONFIG.MAX_KEYWORDS_EXPERIENCE) continue;
-        
-        // Check if keyword is already in this specific bullet
-        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletLower)) {
-          continue;
-        }
-        
-        // Check if this bullet matches any of the keyword's contexts
-        const hasContextMatch = contexts.some(ctx => bulletLower.includes(ctx));
-        
-        if (hasContextMatch && currentCount < targetCount) {
-          // Inject keyword naturally
-          const enhanced = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
-          bulletText = enhanced.replace(bulletPrefix, '');
-          
-          // Update tracking
-          keywordUsageCount.set(keyword, currentCount + 1);
-          injected.push(keyword);
-          
-          // Track which bullet got this keyword
-          if (!usedInBullet.has(keyword)) {
-            usedInBullet.set(keyword, []);
-          }
-          usedInBullet.get(keyword).push(lineIndex);
-          
-          // For high-priority keywords, try to add more than once
-          if (highPrioritySet.has(keyword.toLowerCase()) && currentCount + 1 < CONFIG.HIGH_PRIORITY_MIN_COUNT) {
-            continue; // Will try again in another bullet
-          }
-        }
-      }
-      
-      return bulletPrefix + bulletText;
-    });
-
-    // SECOND PASS: Ensure high-priority keywords appear at least 3 times
-    const highPriorityKeywords = keywordsNeedingMore.filter(kw => highPrioritySet.has(kw.toLowerCase()));
     
-    for (const keyword of highPriorityKeywords) {
-      const currentCount = keywordUsageCount.get(keyword) || 0;
+    // Get all bullet line indices
+    const bulletIndices = [];
+    lines.forEach((line, idx) => {
+      if (bulletPattern.test(line) && line.length > 30) {
+        bulletIndices.push(idx);
+      }
+    });
+    
+    if (bulletIndices.length === 0) {
+      console.warn('[TailorUniversal] No suitable bullets found for keyword injection');
+      return { enhanced: experience, injected: [] };
+    }
+
+    // AGGRESSIVE INJECTION LOOP - iterate through keywords and inject into bullets
+    let bulletCursor = 0;
+    
+    for (const keyword of keywordsNeedingMore) {
+      const targetCount = getTargetCount(keyword);
+      let currentCount = keywordUsageCount.get(keyword) || 0;
+      
+      // Inject until we reach target count
+      while (currentCount < targetCount && bulletCursor < bulletIndices.length * 3) {
+        // Cycle through bullets (wrap around if needed)
+        const bulletIdx = bulletIndices[bulletCursor % bulletIndices.length];
+        const line = lines[bulletIdx];
+        const match = line.match(bulletPattern);
+        
+        if (match) {
+          const bulletPrefix = match[1];
+          const bulletText = match[2];
+          
+          // Check if keyword already in this specific bullet
+          if (!new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletText.toLowerCase())) {
+            // Inject keyword
+            const enhanced = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
+            lines[bulletIdx] = enhanced;
+            
+            currentCount++;
+            keywordUsageCount.set(keyword, currentCount);
+            injected.push(keyword);
+          }
+        }
+        
+        bulletCursor++;
+        
+        // Safety: don't loop forever
+        if (bulletCursor > bulletIndices.length * 5) break;
+      }
+    }
+
+    // SECOND PASS: Any remaining high-priority keywords that still need more
+    for (const keyword of keywordsNeedingMore) {
+      const kwLower = keyword.toLowerCase();
+      if (!highPrioritySet.has(kwLower)) continue;
+      
       const targetCount = CONFIG.HIGH_PRIORITY_MIN_COUNT;
+      let currentCount = keywordUsageCount.get(keyword) || 0;
       
       if (currentCount >= targetCount) continue;
       
-      const neededMore = targetCount - currentCount;
-      let addedCount = 0;
-      
-      // Find suitable bullets to add this keyword
-      for (let i = 0; i < enhancedLines.length && addedCount < neededMore; i++) {
-        const match = enhancedLines[i].match(bulletPattern);
+      // Force inject into any bullet that doesn't have it
+      for (let i = 0; i < bulletIndices.length && currentCount < targetCount; i++) {
+        const bulletIdx = bulletIndices[i];
+        const line = lines[bulletIdx];
+        const match = line.match(bulletPattern);
+        
         if (!match) continue;
         
         const bulletPrefix = match[1];
         const bulletText = match[2];
-        const bulletLower = bulletText.toLowerCase();
         
-        // Skip if keyword already in this bullet
-        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletLower)) {
-          continue;
+        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletText.toLowerCase())) {
+          continue; // Already has keyword
         }
         
-        // Skip very short bullets
-        if (bulletText.length < 30) continue;
-        
-        // Inject keyword
-        enhancedLines[i] = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
-        keywordUsageCount.set(keyword, (keywordUsageCount.get(keyword) || 0) + 1);
+        lines[bulletIdx] = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
+        currentCount++;
+        keywordUsageCount.set(keyword, currentCount);
         injected.push(keyword);
-        addedCount++;
       }
     }
 
     // THIRD PASS: Ensure medium-priority keywords appear at least 2 times
-    const mediumPriorityKeywords = keywordsNeedingMore.filter(kw => mediumPrioritySet.has(kw.toLowerCase()));
-    
-    for (const keyword of mediumPriorityKeywords) {
-      const currentCount = keywordUsageCount.get(keyword) || 0;
+    for (const keyword of keywordsNeedingMore) {
+      const kwLower = keyword.toLowerCase();
+      if (!mediumPrioritySet.has(kwLower)) continue;
+      
       const targetCount = CONFIG.MEDIUM_PRIORITY_MIN_COUNT;
+      let currentCount = keywordUsageCount.get(keyword) || 0;
       
       if (currentCount >= targetCount) continue;
       
-      const neededMore = targetCount - currentCount;
-      let addedCount = 0;
-      
-      for (let i = 0; i < enhancedLines.length && addedCount < neededMore; i++) {
-        const match = enhancedLines[i].match(bulletPattern);
+      for (let i = 0; i < bulletIndices.length && currentCount < targetCount; i++) {
+        const bulletIdx = bulletIndices[i];
+        const line = lines[bulletIdx];
+        const match = line.match(bulletPattern);
+        
         if (!match) continue;
         
         const bulletPrefix = match[1];
         const bulletText = match[2];
-        const bulletLower = bulletText.toLowerCase();
         
-        // Skip if keyword already in this bullet
-        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletLower)) {
+        if (new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i').test(bulletText.toLowerCase())) {
           continue;
         }
         
-        // Skip very short bullets
-        if (bulletText.length < 30) continue;
-        
-        enhancedLines[i] = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
-        keywordUsageCount.set(keyword, (keywordUsageCount.get(keyword) || 0) + 1);
+        lines[bulletIdx] = injectKeywordNaturally(bulletPrefix, bulletText, keyword);
+        currentCount++;
+        keywordUsageCount.set(keyword, currentCount);
         injected.push(keyword);
-        addedCount++;
       }
     }
 
-    return { enhanced: enhancedLines.join('\n'), injected };
+    console.log('[TailorUniversal] Total keywords injected:', injected.length);
+    return { enhanced: lines.join('\n'), injected };
   }
 
   /**

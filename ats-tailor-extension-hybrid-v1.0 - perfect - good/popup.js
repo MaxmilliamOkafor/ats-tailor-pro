@@ -1624,10 +1624,10 @@ class ATSTailor {
       const result = await response.json();
       if (result.error) throw new Error(result.error);
 
-      // Filename format: {FirstName}_{LastName}_CV.pdf
-      const firstName = (p.first_name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-      const lastName = (p.last_name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-      const candidateName = (firstName && lastName) ? `${firstName}_${lastName}` : 'Applicant';
+      // Filename format: {FirstName}_{LastName}_CV.pdf and {FirstName}_{LastName}_Cover_Letter.pdf
+      const firstName = (p.first_name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '') || 'Applicant';
+      const lastName = (p.last_name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '') || '';
+      const fileBaseName = lastName ? `${firstName}_${lastName}` : firstName;
       
       this.profileInfo = { firstName: p.first_name, lastName: p.last_name };
 
@@ -1636,8 +1636,8 @@ class ATSTailor {
         coverLetter: result.tailoredCoverLetter || result.coverLetter,
         cvPdf: result.resumePdf,
         coverPdf: result.coverLetterPdf,
-        cvFileName: `${candidateName}_CV.pdf`,
-        coverFileName: `${candidateName}_Cover_Letter.pdf`,
+        cvFileName: `${fileBaseName}_CV.pdf`,
+        coverFileName: `${fileBaseName}_Cover_Letter.pdf`,
         matchScore: result.matchScore || 0,
         matchedKeywords: result.keywordsMatched || result.matchedKeywords || [],
         missingKeywords: result.keywordsMissing || result.missingKeywords || [],
@@ -1974,8 +1974,8 @@ class ATSTailor {
     const doc = type === 'cv' ? this.generatedDocuments.cvPdf : this.generatedDocuments.coverPdf;
     const textDoc = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
     const filename = type === 'cv' 
-      ? (this.generatedDocuments.cvFileName || `Applicant_CV.pdf`)
-      : (this.generatedDocuments.coverFileName || `Applicant_Cover_Letter.pdf`);
+      ? (this.generatedDocuments.cvFileName || `${this.profileInfo?.firstName || 'Applicant'}_${this.profileInfo?.lastName || ''}_CV.pdf`.replace(/_+/g, '_'))
+      : (this.generatedDocuments.coverFileName || `${this.profileInfo?.firstName || 'Applicant'}_${this.profileInfo?.lastName || ''}_Cover_Letter.pdf`.replace(/_+/g, '_'));
     
     if (doc) {
       const blob = this.base64ToBlob(doc, 'application/pdf');
@@ -2014,8 +2014,8 @@ class ATSTailor {
     const textDoc = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
     const filename =
       type === 'cv'
-        ? this.generatedDocuments.cvFileName || `Applicant_CV.pdf`
-        : this.generatedDocuments.coverFileName || `Applicant_Cover_Letter.pdf`;
+        ? this.generatedDocuments.cvFileName || `${this.profileInfo?.firstName || 'Applicant'}_${this.profileInfo?.lastName || ''}_CV.pdf`.replace(/_+/g, '_')
+        : this.generatedDocuments.coverFileName || `${this.profileInfo?.firstName || 'Applicant'}_${this.profileInfo?.lastName || ''}_Cover_Letter.pdf`.replace(/_+/g, '_');
 
     if (!doc && !textDoc) {
       this.showToast('No document available', 'error');

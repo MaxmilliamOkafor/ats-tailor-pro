@@ -339,7 +339,7 @@
       return summary;
     },
 
-    // ============ INJECT KEYWORDS INTO EXPERIENCE (3-5x distribution) ============
+    // ============ INJECT KEYWORDS INTO EXPERIENCE (AGGRESSIVE - 3-5x distribution) ============
     injectKeywordsIntoExperience(experience, keywords, options = {}) {
       const { minMentions = 3, maxMentions = 5 } = options;
       if (!experience || experience.length === 0) return experience;
@@ -359,28 +359,17 @@
         });
       });
 
-      // Distribution strategy: more recent roles get more keywords
-      const roleDistribution = [
-        { maxPerBullet: 2, maxBullets: 4 }, // Role 1 (most recent)
-        { maxPerBullet: 2, maxBullets: 3 }, // Role 2
-        { maxPerBullet: 1, maxBullets: 2 }, // Role 3
-        { maxPerBullet: 1, maxBullets: 2 }  // Role 4+
-      ];
-
       // Natural injection phrases
       const phrases = [
         'leveraging', 'utilizing', 'implementing', 'applying',
-        'through', 'incorporating', 'employing', 'using'
+        'through', 'incorporating', 'via', 'using', 'with'
       ];
       const getPhrase = () => phrases[Math.floor(Math.random() * phrases.length)];
 
+      // AGGRESSIVE injection: process all bullets, inject until all keywords have enough mentions
       return experience.map((job, jobIndex) => {
-        const config = roleDistribution[Math.min(jobIndex, roleDistribution.length - 1)];
-        
-        const enhancedBullets = job.bullets.map((bullet, bulletIndex) => {
-          if (bulletIndex >= config.maxBullets) return bullet;
-
-          // Find keywords that need more mentions
+        const enhancedBullets = job.bullets.map((bullet) => {
+          // Find keywords that need more mentions AND aren't in this bullet
           const needsMore = keywords.filter(kw => {
             const current = mentions[kw];
             const inBullet = bullet.toLowerCase().includes(kw.toLowerCase());
@@ -389,43 +378,49 @@
 
           if (needsMore.length === 0) return bullet;
 
-          // Inject 1-2 keywords (natural placement inside the sentence)
-          const toInject = needsMore.slice(0, config.maxPerBullet);
           let enhanced = bullet;
-
-          const insertKeywordNaturally = (text, kw, phrase) => {
-            const lower = (text || '').toLowerCase();
-            if (lower.includes(kw.toLowerCase())) return text;
-
-            // Prefer inserting right after strong action verbs
-            const verbMatch = text.match(/^(Led|Managed|Developed|Built|Created|Implemented|Designed|Engineered|Delivered|Owned|Optimized|Automated)\b/i);
-            if (verbMatch) {
-              const idx = verbMatch[0].length;
-              return `${text.slice(0, idx)} ${kw}-driven${text.slice(idx)}`;
-            }
-
-            // Prefer inserting near first comma (keeps it readable)
-            const commaIdx = text.indexOf(',');
-            if (commaIdx > 20 && commaIdx < text.length / 2) {
-              return `${text.slice(0, commaIdx)}, ${phrase} ${kw}${text.slice(commaIdx)}`;
-            }
-
-            // Prefer inserting before final period
-            if (text.endsWith('.')) {
-              return `${text.slice(0, -1)}, ${phrase} ${kw}.`;
-            }
-
-            return `${text}, ${phrase} ${kw}`;
-          };
-
+          
+          // Inject up to 2 keywords per bullet for natural reading
+          const toInject = needsMore.slice(0, 2);
+          
           toInject.forEach(kw => {
             if (mentions[kw] >= maxMentions) return;
+            
+            // Multiple injection strategies for guaranteed insertion
+            const kwLower = kw.toLowerCase();
+            const enhancedLower = enhanced.toLowerCase();
+            
+            if (enhancedLower.includes(kwLower)) return; // Already has it
+            
             const phrase = getPhrase();
-            const next = insertKeywordNaturally(enhanced, kw, phrase);
-            if (next !== enhanced) {
-              enhanced = next;
+            
+            // Strategy 1: After action verb
+            const verbMatch = enhanced.match(/^(Led|Managed|Developed|Built|Created|Implemented|Designed|Engineered|Delivered|Owned|Optimized|Automated|Spearheaded|Directed|Shaped|Drove)\b/i);
+            if (verbMatch) {
+              const idx = verbMatch[0].length;
+              enhanced = `${enhanced.slice(0, idx)} ${kw}-focused${enhanced.slice(idx)}`;
               mentions[kw]++;
+              return;
             }
+            
+            // Strategy 2: Before first comma
+            const commaIdx = enhanced.indexOf(',');
+            if (commaIdx > 15 && commaIdx < enhanced.length * 0.6) {
+              enhanced = `${enhanced.slice(0, commaIdx)}, ${phrase} ${kw}${enhanced.slice(commaIdx)}`;
+              mentions[kw]++;
+              return;
+            }
+            
+            // Strategy 3: Before period at end
+            if (enhanced.endsWith('.')) {
+              enhanced = `${enhanced.slice(0, -1)}, ${phrase} ${kw}.`;
+              mentions[kw]++;
+              return;
+            }
+            
+            // Strategy 4: GUARANTEED - just append
+            enhanced = `${enhanced}, ${phrase} ${kw}`;
+            mentions[kw]++;
           });
 
           return enhanced;
@@ -473,12 +468,12 @@
     async generateCVPDF(tailoredData, candidateData) {
       const startTime = performance.now();
 
-      // Generate filename: {FirstName}_{LastName}_ATS_CV.pdf
+      // Generate filename: {FirstName}_{LastName}_CV.pdf (user requested format)
       const firstName = (candidateData?.firstName || candidateData?.first_name || 'Applicant')
-        .replace(/\s+/g, '_').replace(/[^a-zA-Z_]/g, '');
+        .trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '') || 'Applicant';
       const lastName = (candidateData?.lastName || candidateData?.last_name || '')
-        .replace(/\s+/g, '_').replace(/[^a-zA-Z_]/g, '');
-      const filename = lastName ? `${firstName}_${lastName}_ATS_CV.pdf` : `${firstName}_ATS_CV.pdf`;
+        .trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+      const filename = lastName ? `${firstName}_${lastName}_CV.pdf` : `${firstName}_CV.pdf`;
 
       let pdfBlob = null;
       let pdfBase64 = null;
@@ -677,11 +672,11 @@
     async generateCoverLetterPDF(tailoredData, keywords, jobData, candidateData) {
       const startTime = performance.now();
 
-      // Generate filename
+      // Generate filename: {FirstName}_{LastName}_Cover_Letter.pdf (user requested format)
       const firstName = (candidateData?.firstName || candidateData?.first_name || 'Applicant')
-        .replace(/\s+/g, '_').replace(/[^a-zA-Z_]/g, '');
+        .trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '') || 'Applicant';
       const lastName = (candidateData?.lastName || candidateData?.last_name || '')
-        .replace(/\s+/g, '_').replace(/[^a-zA-Z_]/g, '');
+        .trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
       const filename = lastName ? `${firstName}_${lastName}_Cover_Letter.pdf` : `${firstName}_Cover_Letter.pdf`;
 
       let pdfBlob = null;
