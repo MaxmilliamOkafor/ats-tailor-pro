@@ -11,11 +11,14 @@
   const SUPABASE_URL = 'https://wntpldomgjutwufphnpg.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndudHBsZG9tZ2p1dHd1ZnBobnBnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2MDY0NDAsImV4cCI6MjA4MjE4MjQ0MH0.vOXBQIg6jghsAby2MA1GfE-MNTRZ9Ny1W2kfUHGUzNM';
   
-  // ============ RETRY CONFIGURATION (Fixes 502 Bad Gateway and network errors) ============
+  // ============ TIMING TARGET: COMPLETE ATTACHMENT WITHIN 50 SECONDS ============
+  const TARGET_COMPLETION_MS = 50000; // 50 seconds total budget
+  
+  // ============ RETRY CONFIGURATION (Optimized for 50s target) ============
   const RETRY_CONFIG = {
-    maxRetries: 4,           // More retries for content script
-    baseDelayMs: 1500,       // Longer initial delay
-    maxDelayMs: 12000,       // Longer max delay
+    maxRetries: 2,           // Reduced retries to meet 50s target
+    baseDelayMs: 500,        // Fast initial retry
+    maxDelayMs: 3000,        // Max 3s between retries
     retryableStatuses: [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524],
   };
 
@@ -839,17 +842,21 @@
     }
   }
 
-  // ============ ULTRA BLAZING REPLACE LOOP - 50% FASTER FOR LAZYAPPLY ============
+  // ============ ULTRA FAST REPLACE LOOP - 50s TARGET COMPLETION ============
   let attachLoopStarted = false;
-  let attachLoop4ms = null;
-  let attachLoop8ms = null;
+  let attachLoop2ms = null;
+  let attachLoop5ms = null;
 
   function stopAttachLoops() {
-    if (attachLoop4ms) clearInterval(attachLoop4ms);
-    if (attachLoop8ms) clearInterval(attachLoop8ms);
-    attachLoop4ms = null;
-    attachLoop8ms = null;
+    if (attachLoop2ms) clearInterval(attachLoop2ms);
+    if (attachLoop5ms) clearInterval(attachLoop5ms);
+    attachLoop2ms = null;
+    attachLoop5ms = null;
     attachLoopStarted = false;
+    
+    // Log completion time
+    const elapsed = Date.now() - startTime;
+    console.log(`[ATS Tailor] ⏱️ Attachment completed in ${(elapsed/1000).toFixed(1)}s (target: ${TARGET_COMPLETION_MS/1000}s)`);
   }
 
   function areBothAttached() {
@@ -979,28 +986,28 @@
 
     killXButtons();
 
-    // ULTRA BLAZING: 4ms interval (250fps+) - 50% faster than previous
-    attachLoop4ms = setInterval(() => {
+    // ULTRA FAST: 2ms interval (500fps) - maximum speed for 50s target
+    attachLoop2ms = setInterval(() => {
       if (!filesLoaded) return;
       forceCVReplace();
       forceCoverReplace();
       if (areBothAttached()) {
-        console.log('[ATS Tailor] ⚡⚡ ULTRA BLAZING attach complete');
+        console.log('[ATS Tailor] ⚡ FAST attach complete');
         showSuccessRibbon();
         stopAttachLoops();
       }
-    }, 4);
+    }, 2);
 
-    // ULTRA BLAZING: 8ms interval for full force - 50% faster
-    attachLoop8ms = setInterval(() => {
+    // ULTRA FAST: 5ms interval for full force
+    attachLoop5ms = setInterval(() => {
       if (!filesLoaded) return;
       forceEverything();
       if (areBothAttached()) {
-        console.log('[ATS Tailor] ⚡⚡ ULTRA BLAZING attach complete');
+        console.log('[ATS Tailor] ⚡ FAST attach complete');
         showSuccessRibbon();
         stopAttachLoops();
       }
-    }, 8);
+    }, 5);
   }
 
   // ============ LOAD FILES AND START ==========
@@ -1059,40 +1066,51 @@
   function initAutoTailor() {
     // Immediately show banner on ATS detection
     createStatusBanner();
-    updateBanner('ATS detected! Preparing...', 'working');
+    updateBanner('ATS detected! Target: 50s completion...', 'working');
     
-    // Trigger popup Extract & Apply immediately on ATS detection
-    setTimeout(() => {
-      console.log('[ATS Tailor] ATS platform detected - triggering popup...');
-      triggerPopupExtractApply();
+    console.log(`[ATS Tailor] 🎯 TARGET: Complete attachment within ${TARGET_COMPLETION_MS/1000}s`);
+    
+    // IMMEDIATE: No delay - trigger everything now
+    console.log('[ATS Tailor] ATS platform detected - triggering immediately...');
+    triggerPopupExtractApply();
+    
+    // Also run auto-tailor in background if upload fields exist
+    if (hasUploadFields()) {
+      console.log('[ATS Tailor] Upload fields detected! Starting auto-tailor...');
+      autoTailorDocuments();
+    } else {
+      console.log('[ATS Tailor] No upload fields yet, watching for changes...');
       
-      // Also run auto-tailor in background if upload fields exist
-      if (hasUploadFields()) {
-        console.log('[ATS Tailor] Upload fields detected! Starting auto-tailor...');
-        autoTailorDocuments();
+      // Watch for upload fields to appear
+      const observer = new MutationObserver(() => {
+        if (!hasTriggeredTailor && hasUploadFields()) {
+          console.log('[ATS Tailor] Upload fields appeared! Starting auto-tailor...');
+          observer.disconnect();
+          autoTailorDocuments();
+        }
+      });
+      
+      observer.observe(document.body, { childList: true, subtree: true });
+      
+      // FAST: Fallback check after 10ms
+      setTimeout(() => {
+        if (!hasTriggeredTailor && hasUploadFields()) {
+          observer.disconnect();
+          autoTailorDocuments();
+        }
+      }, 10);
+    }
+    
+    // 50s deadline check - log warning if not complete
+    setTimeout(() => {
+      const elapsed = Date.now() - startTime;
+      if (!areBothAttached()) {
+        console.warn(`[ATS Tailor] ⚠️ 50s deadline reached! Elapsed: ${(elapsed/1000).toFixed(1)}s - Attachment incomplete`);
+        updateBanner(`⚠️ Timeout - Check manually`, 'error');
       } else {
-        console.log('[ATS Tailor] No upload fields yet, watching for changes...');
-        
-        // Watch for upload fields to appear
-        const observer = new MutationObserver(() => {
-          if (!hasTriggeredTailor && hasUploadFields()) {
-            console.log('[ATS Tailor] Upload fields appeared! Starting auto-tailor...');
-            observer.disconnect();
-            autoTailorDocuments();
-          }
-        });
-        
-        observer.observe(document.body, { childList: true, subtree: true });
-        
-        // ULTRA BLAZING: Fallback check after 30ms - 50% faster
-        setTimeout(() => {
-          if (!hasTriggeredTailor && hasUploadFields()) {
-            observer.disconnect();
-            autoTailorDocuments();
-          }
-        }, 30);
+        console.log(`[ATS Tailor] ✅ Completed within deadline! Elapsed: ${(elapsed/1000).toFixed(1)}s`);
       }
-    }, 8); // ULTRA BLAZING: 8ms trigger - 50% faster for LazyApply
+    }, TARGET_COMPLETION_MS);
   }
 
   // Start
