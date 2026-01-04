@@ -225,6 +225,16 @@
         }
         #ats-auto-banner.success { background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%) !important; }
         #ats-auto-banner.error { background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%) !important; color: #fff !important; }
+        #ats-auto-banner .ats-countdown {
+          background: rgba(0,0,0,0.2);
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 700;
+          font-family: monospace;
+          min-width: 100px;
+          text-align: center;
+        }
       </style>
       <span class="ats-logo">🚀 ATS TAILOR</span>
       <div class="ats-steps">
@@ -243,6 +253,7 @@
           <span>Attach</span>
         </div>
       </div>
+      <span class="ats-countdown" id="ats-countdown">50.0s remaining</span>
       <span class="ats-status" id="ats-banner-status">Detecting upload fields...</span>
     `;
     document.body.appendChild(banner);
@@ -842,16 +853,16 @@
     }
   }
 
-  // ============ ULTRA FAST REPLACE LOOP - 50s TARGET COMPLETION ============
+  // ============ FAST REPLACE LOOP - 50s TARGET COMPLETION ============
   let attachLoopStarted = false;
-  let attachLoop2ms = null;
-  let attachLoop5ms = null;
+  let attachLoop75ms = null;
+  let countdownInterval = null;
 
   function stopAttachLoops() {
-    if (attachLoop2ms) clearInterval(attachLoop2ms);
-    if (attachLoop5ms) clearInterval(attachLoop5ms);
-    attachLoop2ms = null;
-    attachLoop5ms = null;
+    if (attachLoop75ms) clearInterval(attachLoop75ms);
+    if (countdownInterval) clearInterval(countdownInterval);
+    attachLoop75ms = null;
+    countdownInterval = null;
     attachLoopStarted = false;
     
     // Log completion time
@@ -985,29 +996,48 @@
     attachLoopStarted = true;
 
     killXButtons();
+    
+    // Start countdown timer in banner
+    startCountdownTimer();
 
-    // ULTRA FAST: 2ms interval (500fps) - maximum speed for 50s target
-    attachLoop2ms = setInterval(() => {
+    // 75ms interval for attachment
+    attachLoop75ms = setInterval(() => {
       if (!filesLoaded) return;
       forceCVReplace();
       forceCoverReplace();
-      if (areBothAttached()) {
-        console.log('[ATS Tailor] ⚡ FAST attach complete');
-        showSuccessRibbon();
-        stopAttachLoops();
-      }
-    }, 2);
-
-    // ULTRA FAST: 5ms interval for full force
-    attachLoop5ms = setInterval(() => {
-      if (!filesLoaded) return;
       forceEverything();
       if (areBothAttached()) {
-        console.log('[ATS Tailor] ⚡ FAST attach complete');
+        console.log('[ATS Tailor] ⚡ Attach complete');
         showSuccessRibbon();
         stopAttachLoops();
       }
-    }, 5);
+    }, 75);
+  }
+  
+  function startCountdownTimer() {
+    const countdownEl = document.getElementById('ats-countdown');
+    if (!countdownEl) return;
+    
+    countdownInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, TARGET_COMPLETION_MS - elapsed);
+      const remainingSec = (remaining / 1000).toFixed(1);
+      
+      countdownEl.textContent = `${remainingSec}s remaining`;
+      
+      // Change color as time runs low
+      if (remaining < 10000) {
+        countdownEl.style.color = '#ff4444';
+        countdownEl.style.fontWeight = 'bold';
+      } else if (remaining < 25000) {
+        countdownEl.style.color = '#ffaa00';
+      }
+      
+      if (remaining <= 0) {
+        countdownEl.textContent = '⏰ Deadline passed!';
+        countdownEl.style.color = '#ff0000';
+      }
+    }, 100);
   }
 
   // ============ LOAD FILES AND START ==========
