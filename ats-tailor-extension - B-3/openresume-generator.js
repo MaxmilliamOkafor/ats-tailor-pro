@@ -288,11 +288,12 @@
     tailorCVData(cvData, keywords, jobData) {
       const tailored = JSON.parse(JSON.stringify(cvData)); // Deep clone
       
-      // Support both array and structured keywords
-      const allKeywords = keywords.all || keywords || [];
-      const highPriority = keywords.highPriority || allKeywords.slice(0, 15);
-      const mediumPriority = keywords.mediumPriority || [];
-      const lowPriority = keywords.lowPriority || [];
+      // ROBUST: Support both array and structured keywords
+      // keywords can be: an array, or an object with {all, highPriority, mediumPriority, lowPriority}
+      const allKeywords = Array.isArray(keywords) ? keywords : (keywords?.all || []);
+      const highPriority = Array.isArray(keywords) ? allKeywords.slice(0, 15) : (keywords?.highPriority || allKeywords.slice(0, 15));
+      const mediumPriority = Array.isArray(keywords) ? [] : (keywords?.mediumPriority || []);
+      const lowPriority = Array.isArray(keywords) ? [] : (keywords?.lowPriority || []);
 
       // 1. Update location to job location
       if (jobData?.location) {
@@ -345,13 +346,19 @@
 
     // ============ ENHANCE SUMMARY WITH KEYWORDS ============
     enhanceSummary(summary, keywords) {
+      // ROBUST: Ensure keywords is always an array
+      const keywordsArray = Array.isArray(keywords) ? keywords : (keywords?.all || keywords?.highPriority || []);
+      
       if (!summary) {
         // Generate default summary
-        return `Results-driven professional with expertise in ${keywords.slice(0, 3).join(', ')}. Proven track record of delivering high-impact solutions and driving measurable business outcomes.`;
+        const topKeywords = keywordsArray.slice(0, 3);
+        return topKeywords.length > 0
+          ? `Results-driven professional with expertise in ${topKeywords.join(', ')}. Proven track record of delivering high-impact solutions and driving measurable business outcomes.`
+          : `Results-driven professional with proven track record of delivering high-impact solutions and driving measurable business outcomes.`;
       }
 
       const summaryLower = summary.toLowerCase();
-      const missing = keywords.filter(kw => !summaryLower.includes(kw.toLowerCase()));
+      const missing = keywordsArray.filter(kw => !summaryLower.includes(kw.toLowerCase()));
 
       if (missing.length > 0) {
         const injection = `. Expertise includes ${missing.slice(0, 3).join(', ')}`;
@@ -785,8 +792,13 @@
       // Extract info
       const name = data.contact.name;
       const jobTitle = jobData?.title || 'the open position';
-      const company = jobData?.company || 'your company';
-      const highPriority = keywords.highPriority || (keywords.all || []).slice(0, 5);
+      // ROBUST: Extract company name properly - avoid showing literal "company" or empty
+      let company = jobData?.company || '';
+      if (!company || company.toLowerCase() === 'company' || company.length < 2) {
+        // Try to extract from job title or use fallback
+        company = jobData?.title?.match(/at\s+([A-Z][A-Za-z0-9\s]+)/)?.[1] || 'your company';
+      }
+      const highPriority = Array.isArray(keywords) ? keywords.slice(0, 5) : (keywords?.highPriority || (keywords?.all || []).slice(0, 5));
       const topExp = data.experience?.[0]?.company || 'my previous roles';
 
       // === HEADER ===
@@ -868,8 +880,12 @@
     generateCoverLetterText(data, keywords, jobData, candidateData) {
       const name = data.contact.name;
       const jobTitle = jobData?.title || 'the open position';
-      const company = jobData?.company || 'your company';
-      const highPriority = keywords.highPriority || (keywords.all || []).slice(0, 5);
+      // ROBUST: Extract company name properly - avoid showing literal "company" or empty
+      let company = jobData?.company || '';
+      if (!company || company.toLowerCase() === 'company' || company.length < 2) {
+        company = jobData?.title?.match(/at\s+([A-Z][A-Za-z0-9\s]+)/)?.[1] || 'your company';
+      }
+      const highPriority = Array.isArray(keywords) ? keywords.slice(0, 5) : (keywords?.highPriority || (keywords?.all || []).slice(0, 5));
 
       const lines = [
         name.toUpperCase(),

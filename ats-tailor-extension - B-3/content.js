@@ -619,9 +619,35 @@
     if (!title) title = getMeta('og:title') || document.title?.split('|')?.[0]?.split('-')?.[0]?.trim() || '';
 
     let company = selectors ? getText(selectors.company) : '';
+    
+    // IMPROVED: Multiple fallback strategies for company extraction
     if (!company) company = getMeta('og:site_name') || '';
-    if (!company && title.includes(' at ')) {
-      company = document.title.split(' at ').pop()?.split('|')[0]?.split('-')[0]?.trim() || '';
+    if (!company) {
+      // Try to extract from title like "Senior Engineer at Bugcrowd"
+      const titleMatch = (getMeta('og:title') || document.title || '').match(/\bat\s+([A-Z][A-Za-z0-9\s&.-]+?)(?:\s*[-|]|\s*$)/i);
+      if (titleMatch) company = titleMatch[1].trim();
+    }
+    if (!company) {
+      // Try URL subdomain (e.g., bugcrowd.greenhouse.io → Bugcrowd)
+      const subdomain = hostname.split('.')[0];
+      if (subdomain && subdomain.length > 2 && !['www', 'apply', 'jobs', 'careers', 'boards', 'job-boards'].includes(subdomain.toLowerCase())) {
+        company = subdomain.charAt(0).toUpperCase() + subdomain.slice(1);
+      }
+    }
+    if (!company) {
+      // Look for company logo alt text or nearby text
+      const logoEl = document.querySelector('[class*="logo"] img, [class*="company"] img, header img');
+      if (logoEl?.alt && logoEl.alt.length > 2 && logoEl.alt.length < 50) {
+        company = logoEl.alt.replace(/\s*logo\s*/i, '').trim();
+      }
+    }
+    // Sanitize: remove common suffixes and clean up
+    if (company) {
+      company = company.replace(/\s*(careers|jobs|hiring|apply|work|join)\s*$/i, '').trim();
+    }
+    // Final validation: reject "Company" or very short names
+    if (!company || company.toLowerCase() === 'company' || company.length < 2) {
+      company = 'your company';
     }
 
     const rawLocation = selectors ? getText(selectors.location) : '';
