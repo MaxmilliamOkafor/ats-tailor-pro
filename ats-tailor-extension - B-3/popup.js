@@ -2739,6 +2739,35 @@ function extractJobInfoFromPageInjected() {
       } catch (e) {}
     }
 
+    // --- Additional Company Fallbacks ---
+    if (!result.company || result.company.toLowerCase() === 'company' || result.company.length < 2) {
+      // Try to extract from title like "Senior Engineer at Bugcrowd"
+      const titleMatch = (result.title || document.title || '').match(/\bat\s+([A-Z][A-Za-z0-9\s&.-]+?)(?:\s*[-|]|\s*$)/i);
+      if (titleMatch) result.company = titleMatch[1].trim();
+    }
+    if (!result.company || result.company.toLowerCase() === 'company' || result.company.length < 2) {
+      // Try URL subdomain (e.g., bugcrowd.greenhouse.io → Bugcrowd)
+      const subdomain = host.split('.')[0];
+      if (subdomain && subdomain.length > 2 && !['www', 'apply', 'jobs', 'careers', 'boards', 'job-boards'].includes(subdomain.toLowerCase())) {
+        result.company = subdomain.charAt(0).toUpperCase() + subdomain.slice(1);
+      }
+    }
+    if (!result.company || result.company.toLowerCase() === 'company' || result.company.length < 2) {
+      // Look for company logo alt text
+      const logoEl = document.querySelector('[class*="logo"] img, [class*="company"] img, header img');
+      if (logoEl?.alt && logoEl.alt.length > 2 && logoEl.alt.length < 50) {
+        result.company = logoEl.alt.replace(/\s*logo\s*/i, '').trim();
+      }
+    }
+    // Sanitize company name
+    if (result.company) {
+      result.company = result.company.replace(/\s*(careers|jobs|hiring|apply|work|join)\s*$/i, '').trim();
+    }
+    // Final fallback
+    if (!result.company || result.company.toLowerCase() === 'company' || result.company.length < 2) {
+      result.company = 'the company';
+    }
+
     // --- Cleanup ---
     result.title = result.title.replace(/\s+/g, ' ').trim().substring(0, 200);
     result.company = result.company.replace(/\s+/g, ' ').trim().substring(0, 100);
