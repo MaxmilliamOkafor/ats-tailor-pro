@@ -792,13 +792,11 @@
       // Extract info
       const name = data.contact.name;
       const jobTitle = jobData?.title || 'the open position';
-      // ROBUST: Extract company name properly - avoid showing literal "company" or empty
-      let company = jobData?.company || '';
-      if (!company || company.toLowerCase() === 'company' || company.length < 2) {
-        // Try to extract from job title or use fallback
-        company = jobData?.title?.match(/at\s+([A-Z][A-Za-z0-9\s]+)/)?.[1] || 'your company';
-      }
-      const highPriority = Array.isArray(keywords) ? keywords.slice(0, 5) : (keywords?.highPriority || (keywords?.all || []).slice(0, 5));
+      // ROBUST: Extract company name with multi-source fallback
+      let company = this.extractCompanyName(jobData);
+      // ROBUST: Ensure keywords is always an array before slicing
+      const keywordsArray = Array.isArray(keywords) ? keywords : (keywords?.all || keywords?.highPriority || []);
+      const highPriority = Array.isArray(keywordsArray) ? keywordsArray.slice(0, 5) : [];
       const topExp = data.experience?.[0]?.company || 'my previous roles';
 
       // === HEADER ===
@@ -880,12 +878,11 @@
     generateCoverLetterText(data, keywords, jobData, candidateData) {
       const name = data.contact.name;
       const jobTitle = jobData?.title || 'the open position';
-      // ROBUST: Extract company name properly - avoid showing literal "company" or empty
-      let company = jobData?.company || '';
-      if (!company || company.toLowerCase() === 'company' || company.length < 2) {
-        company = jobData?.title?.match(/at\s+([A-Z][A-Za-z0-9\s]+)/)?.[1] || 'your company';
-      }
-      const highPriority = Array.isArray(keywords) ? keywords.slice(0, 5) : (keywords?.highPriority || (keywords?.all || []).slice(0, 5));
+      // ROBUST: Extract company name with multi-source fallback
+      let company = this.extractCompanyName(jobData);
+      // ROBUST: Ensure keywords is always an array before slicing
+      const keywordsArray = Array.isArray(keywords) ? keywords : (keywords?.all || keywords?.highPriority || []);
+      const highPriority = Array.isArray(keywordsArray) ? keywordsArray.slice(0, 5) : [];
 
       const lines = [
         name.toUpperCase(),
@@ -934,6 +931,64 @@
       const score = Math.round((matches / allKeywords.length) * 100);
       console.log(`[OpenResume] Match Score: ${score}% (${matches}/${allKeywords.length})`);
       return score;
+    },
+
+    // ============ HELPER: Extract Company Name with Multi-Source Fallback ============
+    extractCompanyName(jobData) {
+      if (!jobData) return 'the company';
+      
+      // Try jobData.company first
+      let company = jobData.company || '';
+      
+      // Validate: reject invalid values
+      const isInvalid = (val) => {
+        if (!val || typeof val !== 'string') return true;
+        const lower = val.toLowerCase().trim();
+        return lower === 'company' || lower === 'the company' || lower === 'your company' || lower.length < 2;
+      };
+      
+      if (isInvalid(company)) {
+        // Try to extract from job title like "Senior Engineer at Bugcrowd"
+        const titleMatch = (jobData.title || '').match(/\bat\s+([A-Z][A-Za-z0-9\s&.-]+?)(?:\s*[-|]|\s*$)/i);
+        if (titleMatch) {
+          company = titleMatch[1].trim();
+        }
+      }
+      
+      if (isInvalid(company)) {
+        // Try to extract from URL (e.g., bugcrowd.greenhouse.io → Bugcrowd)
+        const url = jobData.url || '';
+        const hostMatch = url.match(/https?:\/\/([^.\/]+)\./i);
+        if (hostMatch && hostMatch[1]) {
+          const subdomain = hostMatch[1].toLowerCase();
+          const blacklist = ['www', 'apply', 'jobs', 'careers', 'boards', 'job-boards', 'hire'];
+          if (!blacklist.includes(subdomain) && subdomain.length > 2) {
+            company = subdomain.charAt(0).toUpperCase() + subdomain.slice(1);
+          }
+        }
+      }
+      
+      if (isInvalid(company)) {
+        // Try og:site_name from stored metadata
+        if (jobData.siteName && !isInvalid(jobData.siteName)) {
+          company = jobData.siteName;
+        }
+      }
+      
+      // Final cleanup and sanitization
+      if (company && typeof company === 'string') {
+        company = company
+          .replace(/\s*(careers|jobs|hiring|apply|work|join)\s*$/i, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      
+      // Final fallback
+      if (isInvalid(company)) {
+        company = 'the company';
+      }
+      
+      return company;
     }
   };
 

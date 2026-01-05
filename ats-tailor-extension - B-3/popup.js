@@ -1370,6 +1370,7 @@ class ATSTailor {
   /**
    * Perform AI keyword extraction - reusable helper for tailorDocuments
    * Same logic as aiExtractKeywords but returns the result instead of updating UI
+   * Includes retry logic with exponential backoff for transient failures
    * @returns {Promise<Object>} Keywords object with all, highPriority, mediumPriority, lowPriority
    */
   async performAIKeywordExtraction() {
@@ -1382,43 +1383,88 @@ class ATSTailor {
       throw new Error('No job description detected');
     }
     
-    // Call the AI extraction edge function
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/extract-keywords-ai`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.session.access_token}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        jobDescription: this.currentJob.description,
-        jobTitle: this.currentJob.title || '',
-        company: this.currentJob.company || '',
-      }),
-    });
+    // Retry configuration for keyword extraction
+    const MAX_RETRIES = 4;
+    const BASE_DELAY_MS = 500;
+    const MAX_DELAY_MS = 5000;
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || 'AI extraction failed');
+    let lastError = null;
+    
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000); // 20s timeout
+        
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/extract-keywords-ai`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            jobDescription: this.currentJob.description,
+            jobTitle: this.currentJob.title || '',
+            company: this.currentJob.company || '',
+          }),
+          signal: controller.signal,
+          keepalive: true,
+        });
+        
+        clearTimeout(timeout);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          // Retry on 5xx errors or network issues
+          if (response.status >= 500 || response.status === 0) {
+            throw new Error(`Server error (${response.status}): ${errorText || 'retry'}`);
+          }
+          throw new Error(errorText || 'AI extraction failed');
+        }
+        
+        const result = await response.json();
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        // Build keywords object - ensure arrays
+        const keywords = {
+          all: Array.isArray(result.all) ? result.all : [],
+          highPriority: Array.isArray(result.highPriority) ? result.highPriority : [],
+          mediumPriority: Array.isArray(result.mediumPriority) ? result.mediumPriority : [],
+          lowPriority: Array.isArray(result.lowPriority) ? result.lowPriority : [],
+          structured: result.structured, // Full Resume-Matcher style breakdown
+        };
+        
+        console.log('[ATS Tailor] AI extracted', keywords.all.length, 'keywords');
+        return keywords;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Don't retry on non-retryable errors
+        if (error.name === 'AbortError') {
+          console.warn(`[ATS Tailor] AI extraction timeout on attempt ${attempt + 1}/${MAX_RETRIES + 1}`);
+        } else if (error.message?.includes('401') || error.message?.includes('403')) {
+          // Auth errors - don't retry
+          throw error;
+        } else {
+          console.warn(`[ATS Tailor] AI extraction attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error.message);
+        }
+        
+        // If we have more retries left, wait with exponential backoff
+        if (attempt < MAX_RETRIES) {
+          const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
+          console.log(`[ATS Tailor] Retrying AI extraction in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
     }
     
-    const result = await response.json();
-    
-    if (result.error) {
-      throw new Error(result.error);
-    }
-    
-    // Build keywords object
-    const keywords = {
-      all: result.all || [],
-      highPriority: result.highPriority || [],
-      mediumPriority: result.mediumPriority || [],
-      lowPriority: result.lowPriority || [],
-      structured: result.structured, // Full Resume-Matcher style breakdown
-    };
-    
-    console.log('[ATS Tailor] AI extracted', keywords.all.length, 'keywords');
-    return keywords;
+    // All retries exhausted
+    throw lastError || new Error('AI keyword extraction failed after retries');
   }
 
   /**
