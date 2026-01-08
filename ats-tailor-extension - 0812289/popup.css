@@ -272,11 +272,95 @@ body {
 .job-company {
   font-size: 11px;
   color: rgba(255,255,255,0.8);
+  margin: 0;
+  flex: 1;
 }
 
 .job-location {
   font-size: 10px;
   color: rgba(255,255,255,0.6);
+}
+
+/* Company Detection Row */
+.company-detection-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.company-indicator {
+  font-size: 12px;
+  cursor: help;
+  opacity: 0.8;
+}
+
+.company-indicator.auto-detected {
+  color: #2ed573;
+}
+
+.company-indicator.manual-override {
+  color: #ffa502;
+}
+
+.company-indicator.from-domain {
+  color: #00d4ff;
+}
+
+.btn-edit-company {
+  font-size: 10px;
+  padding: 2px 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.btn-edit-company:hover {
+  opacity: 1;
+}
+
+/* Company Edit Row */
+.company-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.company-edit-input {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 11px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(0,212,255,0.4);
+  border-radius: 4px;
+  color: #fff;
+  outline: none;
+}
+
+.company-edit-input:focus {
+  border-color: #00d4ff;
+  box-shadow: 0 0 0 2px rgba(0,212,255,0.15);
+}
+
+.btn-save-company,
+.btn-cancel-company {
+  font-size: 12px;
+  padding: 3px 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.btn-save-company:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.btn-cancel-company:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 /* Actions */
