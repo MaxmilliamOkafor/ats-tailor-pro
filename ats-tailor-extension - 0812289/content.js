@@ -12,47 +12,63 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndudHBsZG9tZ2p1dHd1ZnBobnBnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2MDY0NDAsImV4cCI6MjA4MjE4MjQ0MH0.vOXBQIg6jghsAby2MA1GfE-MNTRZ9Ny1W2kfUHGUzNM';
   
   // ============ TIER 1-2 TECH COMPANY DOMAINS (Exact Matching) ============
+  // 70+ Major company career sites for proper detection
   const TIER1_COMPANY_DOMAINS = new Map([
-    // Dublin, Ireland
-    ['google.com', 'Google'], ['careers.google.com', 'Google'], ['metacareers.com', 'Meta'], 
-    ['amazon.jobs', 'Amazon'], ['microsoft.com', 'Microsoft'], ['jobs.apple.com', 'Apple'],
+    // FAANG + Major Tech
+    ['google.com', 'Google'], ['careers.google.com', 'Google'], ['about.google', 'Google'],
+    ['meta.com', 'Meta'], ['metacareers.com', 'Meta'], ['facebook.com', 'Meta'],
+    ['amazon.com', 'Amazon'], ['amazon.jobs', 'Amazon'], 
+    ['microsoft.com', 'Microsoft'], ['careers.microsoft.com', 'Microsoft'],
+    ['apple.com', 'Apple'], ['jobs.apple.com', 'Apple'],
+    
+    // Enterprise Software
     ['salesforce.com', 'Salesforce'], ['ibm.com', 'IBM'], ['oracle.com', 'Oracle'], 
-    ['adobe.com', 'Adobe'], ['stripe.com', 'Stripe'], ['hubspot.com', 'HubSpot'], 
-    ['jobs.intel.com', 'Intel'], ['jobs.servicenow.com', 'ServiceNow'], 
-    ['workhuman.com', 'Workhuman'], ['intercom.com', 'Intercom'], ['paypal.com', 'Paypal'],
-    ['jobs.tiktok.com', 'TikTok'], ['bytedance.com', 'ByteDance'], 
-    ['linkedin.com', 'LinkedIn'], ['jobs.dropbox.com', 'Dropbox'], 
-    ['twilio.com', 'Twilio'], ['careers.datadoghq.com', 'Datadog'], 
-    ['jobs.toasttab.com', 'Toast'], ['zendesk.com', 'Zendesk'], 
-    ['docusign.com', 'DocuSign'],
-    // UK Tier 1-2
-    ['arm.com', 'Arm Holdings'], ['deepmind.google', 'Google DeepMind'], 
-    ['jobs.cisco.com', 'Cisco'], ['jpmorgan.com', 'JP Morgan Chase'], 
-    ['about.gitlab.com', 'GitLab'], ['atlassian.com', 'Atlassian'], 
-    ['careers.snap.com', 'Snapchat'], ['careers.capitalone.com', 'Capital One'],
-    ['wasabi.com', 'Wasabi Technologies'], ['samsara.com', 'Samsara'], 
-    ['blockchain.com', 'Blockchain.com'], ['careers.similarweb.com', 'Similarweb'],
-    ['cityfibre.com', 'CityFibre'], ['luminance.com', 'Luminance AI'],
-    ['checkout.com', 'Checkout.com'], ['jobs.revolut.com', 'Revolut'], 
-    ['wise.jobs', 'Wise'], ['monzo.com', 'Monzo'], 
-    ['starlingbank.com', 'Starling Bank'], ['darktrace.com', 'Darktrace'],
-    ['graphcore.ai', 'Graphcore'], ['benevolent.com', 'BenevolentAI'],
-    ['thoughtmachine.net', 'Thought Machine'],
-    // USA Tier 1-2
-    ['nvidia.com', 'Nvidia'], ['broadcom.com', 'Broadcom'], ['tesla.com', 'Tesla'],
-    ['jobs.amd.com', 'AMD'], ['qualcomm.com', 'Qualcomm'], ['jobs.netflix.com', 'Netflix'],
-    ['uber.com', 'Uber'], ['careers.airbnb.com', 'Airbnb'], 
-    ['jobs.palantir.com', 'Palantir'], ['crowdstrike.com', 'CrowdStrike'],
-    ['jobs.snowflake.com', 'Snowflake'], ['workday.com', 'Workday'], 
-    ['intuit.com', 'Intuit'], ['appliedmaterials.jobs', 'Applied Materials'],
-    ['careers.ti.com', 'Texas Instruments'], ['micron.com', 'Micron'],
-    ['lamresearch.com', 'Lam Research'], ['kla.com', 'KLA'],
-    ['synopsys.com', 'Synopsys'], ['cadence.com', 'Cadence Design'],
-    ['autodesk.com', 'Autodesk'], ['ansys.com', 'ANSYS'],
-    ['unity.com', 'Unity Software'], ['jobs.roblox.com', 'Roblox'],
-    ['block.xyz', 'Block (Square)'], ['careers.sq.com', 'Square'],
-    ['doordash.com', 'DoorDash'], ['instacart.com', 'Instacart'],
-    ['rivian.com', 'Rivian'], ['chime.com', 'Chime']
+    ['adobe.com', 'Adobe'], ['sap.com', 'SAP'], ['vmware.com', 'VMware'],
+    ['servicenow.com', 'ServiceNow'], ['workday.com', 'Workday'],
+    
+    // Fintech & Payments
+    ['stripe.com', 'Stripe'], ['paypal.com', 'PayPal'], ['visa.com', 'Visa'],
+    ['mastercard.com', 'Mastercard'], ['block.xyz', 'Block'], ['sq.com', 'Square'],
+    
+    // SaaS & Cloud
+    ['hubspot.com', 'HubSpot'], ['intercom.com', 'Intercom'], ['zendesk.com', 'Zendesk'],
+    ['docusign.com', 'DocuSign'], ['twilio.com', 'Twilio'], ['slack.com', 'Slack'],
+    ['atlassian.com', 'Atlassian'], ['gitlab.com', 'GitLab'], ['circleci.com', 'CircleCI'],
+    ['datadoghq.com', 'Datadog'], ['unity.com', 'Unity'], ['udemy.com', 'Udemy'],
+    
+    // Social & Media
+    ['linkedin.com', 'LinkedIn'], ['tiktok.com', 'TikTok'], ['bytedance.com', 'ByteDance'],
+    ['snap.com', 'Snapchat'], ['dropbox.com', 'Dropbox'], ['bloomberg.com', 'Bloomberg'],
+    
+    // Hardware & Semiconductors
+    ['intel.com', 'Intel'], ['broadcom.com', 'Broadcom'], ['arm.com', 'Arm Holdings'],
+    ['tsmc.com', 'TSMC'], ['appliedmaterials.com', 'Applied Materials'], ['cisco.com', 'Cisco'],
+    
+    // Finance & Consulting (Big 4)
+    ['fidelity.com', 'Fidelity'], ['morganstanley.com', 'Morgan Stanley'],
+    ['jpmorgan.com', 'JP Morgan Chase'], ['blackrock.com', 'BlackRock'],
+    ['capitalone.com', 'Capital One'], ['tdsecurities.com', 'TD Securities'],
+    ['kpmg.com', 'KPMG'], ['deloitte.com', 'Deloitte'], ['accenture.com', 'Accenture'],
+    ['pwc.com', 'PwC'], ['ey.com', 'EY'], ['mckinsey.com', 'McKinsey'], ['kkr.com', 'KKR'],
+    ['fenergo.com', 'Fenergo'],
+    
+    // Quant & Trading Firms
+    ['citadel.com', 'Citadel'], ['janestreet.com', 'Jane Street'], ['sig.com', 'SIG'],
+    ['twosigma.com', 'Two Sigma'], ['deshaw.com', 'DE Shaw'], ['rentec.com', 'Renaissance Technologies'],
+    ['mlp.com', 'Millennium Management'], ['virtu.com', 'Virtu Financial'],
+    ['hudsontrading.com', 'Hudson River Trading'], ['jumptrading.com', 'Jump Trading'],
+    
+    // Other Major Tech
+    ['nvidia.com', 'Nvidia'], ['tesla.com', 'Tesla'], ['uber.com', 'Uber'],
+    ['airbnb.com', 'Airbnb'], ['palantir.com', 'Palantir'], ['crowdstrike.com', 'CrowdStrike'],
+    ['snowflake.com', 'Snowflake'], ['intuit.com', 'Intuit'], ['toasttab.com', 'Toast'],
+    ['workhuman.com', 'Workhuman'], ['draftkings.com', 'DraftKings'],
+    ['walmart.com', 'Walmart'], ['roblox.com', 'Roblox'], ['doordash.com', 'DoorDash'],
+    ['instacart.com', 'Instacart'], ['rivian.com', 'Rivian'], ['chime.com', 'Chime'],
+    ['wasabi.com', 'Wasabi Technologies'], ['samsara.com', 'Samsara'],
+    ['blockchain.com', 'Blockchain.com'], ['similarweb.com', 'Similarweb'],
+    ['deepmind.google', 'Google DeepMind'], ['netflix.com', 'Netflix'],
+    ['amd.com', 'AMD'], ['qualcomm.com', 'Qualcomm']
   ]);
   
   // Normalize domain - strips www. prefix
@@ -115,6 +131,7 @@
   const SUCCESS_BANNER_MSG = '🚀 ATS TAILOR ✅ Done! Match: 100% - Files attached!';
 
   const SUPPORTED_HOSTS = [
+    // Standard ATS platforms
     'greenhouse.io', 'job-boards.greenhouse.io', 'boards.greenhouse.io',
     'workday.com', 'myworkdayjobs.com', 'smartrecruiters.com',
     'bullhornstaffing.com', 'bullhorn.com', 'teamtailor.com',
@@ -122,7 +139,24 @@
     'oracle.com', 'oraclecloud.com', 'taleo.net', 'lever.co',
     'jobvite.com', 'ashbyhq.com', 'recruiterbox.com', 'breezy.hr',
     'recruitee.com', 'personio.de', 'personio.com', 'bamboohr.com',
-    'successfactors.com', 'ultipro.com', 'dayforce.com', 'adp.com'
+    'successfactors.com', 'ultipro.com', 'dayforce.com', 'adp.com',
+    // Major company career sites (70+)
+    'google.com', 'meta.com', 'amazon.com', 'microsoft.com', 'apple.com',
+    'salesforce.com', 'ibm.com', 'adobe.com', 'stripe.com', 'hubspot.com',
+    'intel.com', 'servicenow.com', 'workhuman.com', 'intercom.com', 'paypal.com',
+    'tiktok.com', 'linkedin.com', 'dropbox.com', 'twilio.com', 'datadoghq.com',
+    'toasttab.com', 'zendesk.com', 'docusign.com', 'fidelity.com', 'sap.com',
+    'morganstanley.com', 'kpmg.com', 'deloitte.com', 'accenture.com', 'pwc.com',
+    'ey.com', 'citadel.com', 'janestreet.com', 'sig.com', 'twosigma.com',
+    'deshaw.com', 'rentec.com', 'mlp.com', 'virtu.com', 'hudsontrading.com',
+    'jumptrading.com', 'broadcom.com', 'slack.com', 'circleci.com', 'unity.com',
+    'bloomberg.com', 'vmware.com', 'mckinsey.com', 'udemy.com', 'draftkings.com',
+    'walmart.com', 'mastercard.com', 'visa.com', 'blackrock.com', 'tdsecurities.com',
+    'kkr.com', 'fenergo.com', 'appliedmaterials.com', 'tsmc.com', 'arm.com',
+    'deepmind.google', 'cisco.com', 'jpmorgan.com', 'gitlab.com', 'atlassian.com',
+    'snap.com', 'capitalone.com', 'wasabi.com', 'samsara.com', 'blockchain.com',
+    'similarweb.com', 'nvidia.com', 'tesla.com', 'uber.com', 'airbnb.com',
+    'palantir.com', 'crowdstrike.com', 'snowflake.com', 'netflix.com', 'amd.com'
   ];
 
   const isSupportedHost = (hostname) => {
