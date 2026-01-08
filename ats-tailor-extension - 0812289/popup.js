@@ -280,6 +280,15 @@ class ATSTailor {
       if (e.key === 'Enter') this.login();
     });
     
+    // Company manual override events
+    document.getElementById('editCompanyBtn')?.addEventListener('click', () => this.showCompanyEditMode());
+    document.getElementById('saveCompanyBtn')?.addEventListener('click', () => this.saveCompanyOverride());
+    document.getElementById('cancelCompanyBtn')?.addEventListener('click', () => this.hideCompanyEditMode());
+    document.getElementById('companyEditInput')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.saveCompanyOverride();
+      if (e.key === 'Escape') this.hideCompanyEditMode();
+    });
+    
     // Listen for runtime messages to trigger Extract & Apply Keywords button
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === 'TRIGGER_EXTRACT_APPLY' || message.action === 'POPUP_TRIGGER_EXTRACT_APPLY') {
@@ -292,6 +301,45 @@ class ATSTailor {
     
     // Check for pending automation trigger on popup open
     this.checkPendingAutomationTrigger();
+  }
+  
+  // Company manual override methods
+  showCompanyEditMode() {
+    const detectionRow = document.getElementById('companyDetectionRow');
+    const editRow = document.getElementById('companyEditRow');
+    const editInput = document.getElementById('companyEditInput');
+    
+    if (detectionRow) detectionRow.classList.add('hidden');
+    if (editRow) editRow.classList.remove('hidden');
+    if (editInput) {
+      editInput.value = this.currentJob?.company || '';
+      editInput.focus();
+    }
+  }
+  
+  hideCompanyEditMode() {
+    const detectionRow = document.getElementById('companyDetectionRow');
+    const editRow = document.getElementById('companyEditRow');
+    
+    if (detectionRow) detectionRow.classList.remove('hidden');
+    if (editRow) editRow.classList.add('hidden');
+  }
+  
+  saveCompanyOverride() {
+    const editInput = document.getElementById('companyEditInput');
+    const newCompany = editInput?.value?.trim();
+    
+    if (newCompany && this.currentJob) {
+      this.currentJob.company = newCompany;
+      this.currentJob.companySource = 'manual';
+      
+      // Save to storage
+      chrome.storage.local.set({ ats_lastJob: this.currentJob });
+      
+      this.updateJobDisplay();
+      this.hideCompanyEditMode();
+      this.showToast(`Company set to: ${newCompany}`, 'success');
+    }
   }
   
   // NEW: Download text version of CV/Cover Letter
@@ -1426,24 +1474,59 @@ class ATSTailor {
     const companyEl = document.getElementById('jobCompany');
     const locationEl = document.getElementById('jobLocation');
     const noJobBadge = document.getElementById('noJobBadge');
+    const companyIndicator = document.getElementById('companyIndicator');
+    const companyDetectionRow = document.getElementById('companyDetectionRow');
+    const editBtn = document.getElementById('editCompanyBtn');
     
     if (this.currentJob) {
       if (titleEl) titleEl.textContent = this.currentJob.title || 'Job Position';
-      // Hide "the company" fallback - only show real company names
+      
+      // Company display with source indicator
       const company = this.currentJob.company || '';
       const isValidCompany = company && company.toLowerCase() !== 'the company' && company.toLowerCase() !== 'company';
+      const companySource = this.currentJob.companySource || 'auto';
+      
       if (companyEl) {
-        companyEl.textContent = isValidCompany ? company : '';
-        companyEl.style.display = isValidCompany ? '' : 'none';
+        companyEl.textContent = isValidCompany ? company : 'Click ✏️ to set company';
+        companyEl.style.opacity = isValidCompany ? '1' : '0.5';
       }
+      
+      // Update company indicator icon and tooltip based on source
+      if (companyIndicator) {
+        if (companySource === 'manual') {
+          companyIndicator.textContent = '✏️';
+          companyIndicator.title = 'Manually set company';
+          companyIndicator.className = 'company-indicator manual-override';
+        } else if (companySource === 'domain') {
+          companyIndicator.textContent = '🌐';
+          companyIndicator.title = `Detected from domain: ${this.currentJob.url || ''}`;
+          companyIndicator.className = 'company-indicator from-domain';
+        } else if (companySource === 'jsonld') {
+          companyIndicator.textContent = '📋';
+          companyIndicator.title = 'Extracted from structured data (JSON-LD)';
+          companyIndicator.className = 'company-indicator auto-detected';
+        } else {
+          companyIndicator.textContent = '🏢';
+          companyIndicator.title = isValidCompany ? `Auto-detected: ${company}` : 'Company not detected';
+          companyIndicator.className = 'company-indicator auto-detected';
+        }
+      }
+      
+      if (companyDetectionRow) companyDetectionRow.classList.remove('hidden');
+      if (editBtn) editBtn.style.display = '';
       if (locationEl) locationEl.textContent = this.currentJob.location || '';
       if (noJobBadge) noJobBadge.classList.add('hidden');
     } else {
       if (titleEl) titleEl.textContent = 'No job detected';
       if (companyEl) companyEl.textContent = 'Navigate to a job posting';
+      if (companyIndicator) companyIndicator.textContent = '🏢';
+      if (editBtn) editBtn.style.display = 'none';
       if (locationEl) locationEl.textContent = '';
       if (noJobBadge) noJobBadge.classList.remove('hidden');
     }
+    
+    // Hide edit mode
+    this.hideCompanyEditMode();
   }
 
   /**
@@ -2940,11 +3023,13 @@ class ATSTailor {
 /**
  * Injected function to extract job information from the current page
  * Runs in page context - self-contained with no external dependencies
+ * Enhanced with 70+ company domain mapping and platform-specific selectors
  */
 function extractJobInfoFromPageInjected() {
   const result = {
     title: '',
     company: '',
+    companySource: 'auto', // Track how company was detected: auto, domain, jsonld, manual
     location: '',
     description: '',
     url: window.location.href
@@ -2952,22 +3037,99 @@ function extractJobInfoFromPageInjected() {
 
   try {
     const host = window.location.hostname.toLowerCase();
+    const normalizedHost = host.replace(/^www\./, '');
+
+    // ============ TIER 1-2 COMPANY DOMAIN MAPPING (70+ companies) ============
+    const COMPANY_DOMAINS = {
+      // FAANG + Major Tech
+      'google.com': 'Google', 'careers.google.com': 'Google', 
+      'meta.com': 'Meta', 'metacareers.com': 'Meta', 'facebook.com': 'Meta',
+      'amazon.com': 'Amazon', 'amazon.jobs': 'Amazon',
+      'microsoft.com': 'Microsoft', 'careers.microsoft.com': 'Microsoft',
+      'apple.com': 'Apple', 'jobs.apple.com': 'Apple',
+      // Enterprise Software
+      'salesforce.com': 'Salesforce', 'ibm.com': 'IBM', 'oracle.com': 'Oracle',
+      'adobe.com': 'Adobe', 'sap.com': 'SAP', 'vmware.com': 'VMware',
+      'servicenow.com': 'ServiceNow', 'workday.com': 'Workday',
+      // Fintech & Payments
+      'stripe.com': 'Stripe', 'paypal.com': 'PayPal', 'visa.com': 'Visa',
+      'mastercard.com': 'Mastercard', 'block.xyz': 'Block', 'sq.com': 'Square',
+      // SaaS & Cloud
+      'hubspot.com': 'HubSpot', 'intercom.com': 'Intercom', 'zendesk.com': 'Zendesk',
+      'docusign.com': 'DocuSign', 'twilio.com': 'Twilio', 'slack.com': 'Slack',
+      'atlassian.com': 'Atlassian', 'gitlab.com': 'GitLab', 'circleci.com': 'CircleCI',
+      'datadoghq.com': 'Datadog', 'unity.com': 'Unity', 'udemy.com': 'Udemy',
+      // Social & Media
+      'linkedin.com': 'LinkedIn', 'tiktok.com': 'TikTok', 'bytedance.com': 'ByteDance',
+      'snap.com': 'Snapchat', 'dropbox.com': 'Dropbox', 'bloomberg.com': 'Bloomberg',
+      // Hardware & Semiconductors
+      'intel.com': 'Intel', 'broadcom.com': 'Broadcom', 'arm.com': 'Arm Holdings',
+      'tsmc.com': 'TSMC', 'appliedmaterials.com': 'Applied Materials', 'cisco.com': 'Cisco',
+      'nvidia.com': 'Nvidia', 'amd.com': 'AMD', 'qualcomm.com': 'Qualcomm',
+      // Finance & Consulting
+      'fidelity.com': 'Fidelity', 'morganstanley.com': 'Morgan Stanley',
+      'jpmorgan.com': 'JP Morgan Chase', 'blackrock.com': 'BlackRock',
+      'capitalone.com': 'Capital One', 'tdsecurities.com': 'TD Securities',
+      'kpmg.com': 'KPMG', 'deloitte.com': 'Deloitte', 'accenture.com': 'Accenture',
+      'pwc.com': 'PwC', 'ey.com': 'EY', 'mckinsey.com': 'McKinsey', 'kkr.com': 'KKR',
+      'fenergo.com': 'Fenergo',
+      // Quant & Trading
+      'citadel.com': 'Citadel', 'janestreet.com': 'Jane Street', 'sig.com': 'SIG',
+      'twosigma.com': 'Two Sigma', 'deshaw.com': 'DE Shaw', 'rentec.com': 'Renaissance Technologies',
+      'mlp.com': 'Millennium Management', 'virtu.com': 'Virtu Financial',
+      'hudsontrading.com': 'Hudson River Trading', 'jumptrading.com': 'Jump Trading',
+      // Other Major Tech
+      'netflix.com': 'Netflix', 'tesla.com': 'Tesla', 'uber.com': 'Uber',
+      'airbnb.com': 'Airbnb', 'palantir.com': 'Palantir', 'crowdstrike.com': 'CrowdStrike',
+      'snowflake.com': 'Snowflake', 'intuit.com': 'Intuit', 'toasttab.com': 'Toast',
+      'workhuman.com': 'Workhuman', 'draftkings.com': 'DraftKings',
+      'walmart.com': 'Walmart', 'roblox.com': 'Roblox', 'doordash.com': 'DoorDash',
+      'instacart.com': 'Instacart', 'rivian.com': 'Rivian', 'chime.com': 'Chime',
+      'wasabi.com': 'Wasabi Technologies', 'samsara.com': 'Samsara',
+      'blockchain.com': 'Blockchain.com', 'similarweb.com': 'Similarweb',
+      'deepmind.google': 'Google DeepMind'
+    };
+
+    // Check if current host matches any known company domain
+    const matchCompanyFromDomain = () => {
+      // Direct match
+      if (COMPANY_DOMAINS[normalizedHost]) {
+        return COMPANY_DOMAINS[normalizedHost];
+      }
+      // Partial match - check if domain contains any known company
+      for (const [domain, company] of Object.entries(COMPANY_DOMAINS)) {
+        const baseDomain = domain.split('.').slice(-2).join('.');
+        if (normalizedHost.includes(baseDomain.split('.')[0]) || normalizedHost.endsWith(baseDomain)) {
+          return company;
+        }
+      }
+      return null;
+    };
 
     // --- Helper: get text from first matching selector ---
     const getText = (...selectors) => {
       for (const sel of selectors) {
-        const el = document.querySelector(sel);
-        if (el?.textContent?.trim()) return el.textContent.trim();
+        try {
+          const el = document.querySelector(sel);
+          if (el?.textContent?.trim()) return el.textContent.trim();
+        } catch {}
       }
       return '';
     };
 
+    // --- HubSpot ---
+    if (host.includes('hubspot')) {
+      result.title = getText('h1.job-title', 'h1[class*="title"]', '.posting-headline', 'h1');
+      result.company = 'HubSpot';
+      result.companySource = 'domain';
+      result.location = getText('[class*="location"]', '.job-location', '.posting-categories .location');
+      result.description = getText('.job-description', '.posting-content', '[class*="description"]', 'main', '#content');
+    }
     // --- Greenhouse ---
-    if (host.includes('greenhouse')) {
+    else if (host.includes('greenhouse')) {
       result.title = getText('h1.app-title', '.job-title h1', 'h1[class*="job"]', '.posting-headline h1', 'h1');
       result.company = getText('.company-name', '[class*="company"]') || document.querySelector('meta[property="og:site_name"]')?.content || '';
       result.location = getText('.location', '[class*="location"]', '.posting-categories .location');
-      // Greenhouse uses #content or .content for full JD
       result.description = getText('#content', '.content', '.posting-content', '.job-post-content', '[class*="description"]', 'main');
     }
     // --- Workday / myworkdayjobs ---
@@ -2975,15 +3137,27 @@ function extractJobInfoFromPageInjected() {
       result.title = getText('[data-automation-id="jobPostingHeader"] h2', 'h2[data-automation-id="jobTitle"]', '[data-automation-id="jobPostingTitle"]', 'h1', 'h2');
       result.company = getText('[data-automation-id="company"]') || document.querySelector('meta[property="og:site_name"]')?.content || '';
       result.location = getText('[data-automation-id="locations"]', '[data-automation-id="location"]', '[class*="location"]');
-      // Workday stores JD in data-automation-id="jobPostingDescription" or a large container
       const descEl = document.querySelector('[data-automation-id="jobPostingDescription"]');
       if (descEl) {
         result.description = descEl.innerText || descEl.textContent || '';
       } else {
-        // Fallback: grab largest text block
         const main = document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
         result.description = main.innerText?.substring(0, 15000) || '';
       }
+    }
+    // --- Lever ---
+    else if (host.includes('lever.co') || host.includes('jobs.lever')) {
+      result.title = getText('h2.posting-headline', 'h1.posting-headline', 'h1', '.posting-headline');
+      result.company = getText('.posting-categories .sort-by-team', '.company-name') || document.querySelector('meta[property="og:site_name"]')?.content || '';
+      result.location = getText('.posting-categories .sort-by-location', '.location', '[class*="location"]');
+      result.description = getText('.posting-description', '.posting-page', '[class*="description"]', 'main');
+    }
+    // --- Ashby ---
+    else if (host.includes('ashbyhq.com') || host.includes('jobs.ashby')) {
+      result.title = getText('h1[class*="JobTitle"]', 'h1.job-title', 'h1');
+      result.company = getText('[class*="CompanyName"]', '.company-name') || document.querySelector('meta[property="og:site_name"]')?.content || '';
+      result.location = getText('[class*="Location"]', '.location', '[class*="location"]');
+      result.description = getText('[class*="JobDescription"]', '.job-description', '[class*="description"]', 'main');
     }
     // --- SmartRecruiters ---
     else if (host.includes('smartrecruiters')) {
@@ -3027,6 +3201,20 @@ function extractJobInfoFromPageInjected() {
       result.location = getText('.job-location', '[class*="location"]');
       result.description = getText('.job-description', '#requisitionDescriptionInterface', 'main');
     }
+    // --- LinkedIn ---
+    else if (host.includes('linkedin')) {
+      result.title = getText('h1.top-card-layout__title', 'h1.jobs-unified-top-card__job-title', 'h1');
+      result.company = getText('.top-card-layout__card a.topcard__org-name-link', '.jobs-unified-top-card__company-name', '[class*="company"]');
+      result.location = getText('.top-card-layout__card .topcard__flavor--bullet', '.jobs-unified-top-card__bullet', '[class*="location"]');
+      result.description = getText('.show-more-less-html__markup', '.jobs-description', '.description', 'main');
+    }
+    // --- Indeed ---
+    else if (host.includes('indeed')) {
+      result.title = getText('h1.jobsearch-JobInfoHeader-title', 'h1[class*="JobTitle"]', 'h1');
+      result.company = getText('[data-testid="inlineHeader-companyName"]', '.jobsearch-InlineCompanyRating-companyHeader', '[class*="company"]');
+      result.location = getText('[data-testid="inlineHeader-companyLocation"]', '.jobsearch-JobInfoHeader-subtitle', '[class*="location"]');
+      result.description = getText('#jobDescriptionText', '.jobsearch-jobDescriptionText', '[class*="description"]', 'main');
+    }
     // --- Generic fallback ---
     else {
       result.title = getText('h1') || document.title.split('|')[0].split('-')[0].trim();
@@ -3040,13 +3228,11 @@ function extractJobInfoFromPageInjected() {
       result.title = document.querySelector('meta[property="og:title"]')?.content || document.title;
     }
     if (!result.description || result.description.length < 100) {
-      // Try grabbing full body text as last resort
       const fallbackDesc = document.querySelector('meta[property="og:description"]')?.content ||
                            document.querySelector('meta[name="description"]')?.content || '';
       if (fallbackDesc.length > result.description.length) {
         result.description = fallbackDesc;
       }
-      // If still short, grab main content
       if (result.description.length < 200) {
         const mainEl = document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
         result.description = (mainEl.innerText || mainEl.textContent || '').substring(0, 15000);
@@ -3058,11 +3244,13 @@ function extractJobInfoFromPageInjected() {
     for (const script of jsonLdScripts) {
       try {
         let data = JSON.parse(script.textContent);
-        // Handle arrays
         if (Array.isArray(data)) data = data.find(d => d['@type'] === 'JobPosting');
         if (data?.['@type'] === 'JobPosting') {
           if (!result.title && data.title) result.title = data.title;
-          if (!result.company && data.hiringOrganization?.name) result.company = data.hiringOrganization.name;
+          if (!result.company && data.hiringOrganization?.name) {
+            result.company = data.hiringOrganization.name;
+            result.companySource = 'jsonld';
+          }
           if (!result.location) {
             const loc = data.jobLocation;
             if (loc?.address?.addressLocality) {
@@ -3073,7 +3261,6 @@ function extractJobInfoFromPageInjected() {
             }
           }
           if ((!result.description || result.description.length < 200) && data.description) {
-            // Strip HTML from structured data description
             const temp = document.createElement('div');
             temp.innerHTML = data.description;
             const cleanDesc = temp.textContent || temp.innerText || '';
@@ -3082,6 +3269,13 @@ function extractJobInfoFromPageInjected() {
           break;
         }
       } catch (e) {}
+    }
+
+    // --- Company from known domain (HIGHEST PRIORITY) ---
+    const domainCompany = matchCompanyFromDomain();
+    if (domainCompany && result.companySource !== 'manual') {
+      result.company = domainCompany;
+      result.companySource = 'domain';
     }
 
     // --- Additional Company Fallbacks ---
@@ -3095,6 +3289,7 @@ function extractJobInfoFromPageInjected() {
       const subdomain = host.split('.')[0];
       if (subdomain && subdomain.length > 2 && !['www', 'apply', 'jobs', 'careers', 'boards', 'job-boards'].includes(subdomain.toLowerCase())) {
         result.company = subdomain.charAt(0).toUpperCase() + subdomain.slice(1);
+        result.companySource = 'domain';
       }
     }
     if (!result.company || result.company.toLowerCase() === 'company' || result.company.length < 2) {

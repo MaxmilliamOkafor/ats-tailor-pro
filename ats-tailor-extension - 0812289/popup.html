@@ -76,7 +76,18 @@
           <button id="refreshJob" class="btn-icon" title="Refresh">🔄</button>
         </div>
         <h3 id="jobTitle" class="job-title">Scanning page...</h3>
-        <p id="jobCompany" class="job-company"></p>
+        
+        <!-- Company with Visual Indicator + Manual Override -->
+        <div class="company-detection-row" id="companyDetectionRow">
+          <span class="company-indicator" id="companyIndicator" title="Auto-detected company">🏢</span>
+          <p id="jobCompany" class="job-company"></p>
+          <button id="editCompanyBtn" class="btn-icon btn-edit-company" title="Edit company name">✏️</button>
+        </div>
+        <div class="company-edit-row hidden" id="companyEditRow">
+          <input type="text" id="companyEditInput" class="company-edit-input" placeholder="Enter company name">
+          <button id="saveCompanyBtn" class="btn-icon btn-save-company" title="Save">✅</button>
+          <button id="cancelCompanyBtn" class="btn-icon btn-cancel-company" title="Cancel">❌</button>
+        </div>
         <p id="jobLocation" class="job-location"></p>
         <span id="noJobBadge" class="no-job-badge hidden">No job detected</span>
       </div>
