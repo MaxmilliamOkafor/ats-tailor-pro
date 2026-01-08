@@ -4,51 +4,53 @@
 const SUPABASE_URL = 'https://wntpldomgjutwufphnpg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndudHBsZG9tZ2p1dHd1ZnBobnBnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2MDY0NDAsImV4cCI6MjA4MjE4MjQ0MH0.vOXBQIg6jghsAby2MA1GfE-MNTRZ9Ny1W2kfUHGUzNM';
 
-// ============ TIER 1-2 TECH COMPANY DETECTION ============
+// ============ TIER 1-2 TECH COMPANY DETECTION (70+ companies) ============
 const TIER1_TECH_COMPANIES = {
-  dublin_ireland: new Set(['google','meta','amazon','microsoft','apple','salesforce','ibm','oracle','adobe','stripe','hubspot','intel','servicenow','workhuman','intercom','paypal','tiktok','bytedance','linkedin','dropbox','twilio','datadog','toast','zendesk','docusign']),
-  uk_tier1: new Set(['arm','armholdings','deepmind','googledeepmind','cisco','jpmorgan','jpmorganchase','gitlab','atlassian','snapchat','capitalone','wasabi','wasabitechnologies','samsara','blockchain','blockchain.com','similarweb','cityfibre','luminance','luminanceai','checkout','checkout.com','revolut','wise','monzo','starlingbank','darktrace','graphcore','benevolentai','thoughtmachine']),
-  usa_tier1: new Set(['nvidia','broadcom','tesla','amd','qualcomm','netflix','uber','airbnb','palantir','crowdstrike','snowflake','workday','intuit','appliedmaterials','texasinstruments','micron','lamresearch','kla','synopsys','cadence','autodesk','ansys','unity','unitysoftware','roblox','block','square','doordash','instacart','rivian','chime'])
+  // FAANG + Major Tech
+  faang: new Set(['google','meta','amazon','microsoft','apple','facebook']),
+  // Enterprise Software  
+  enterprise: new Set(['salesforce','ibm','oracle','adobe','sap','vmware','servicenow','workday']),
+  // Fintech & Payments
+  fintech: new Set(['stripe','paypal','visa','mastercard','block','square']),
+  // SaaS & Cloud
+  saas: new Set(['hubspot','intercom','zendesk','docusign','twilio','slack','atlassian','gitlab','circleci','datadog','datadoghq','unity','udemy']),
+  // Social & Media
+  social: new Set(['linkedin','tiktok','bytedance','snap','snapchat','dropbox','bloomberg']),
+  // Hardware & Semiconductors
+  hardware: new Set(['intel','broadcom','arm','armholdings','tsmc','appliedmaterials','cisco','nvidia','amd','qualcomm']),
+  // Finance & Consulting
+  finance: new Set(['fidelity','morganstanley','jpmorgan','jpmorganchase','blackrock','capitalone','tdsecurities','kpmg','deloitte','accenture','pwc','ey','mckinsey','kkr','fenergo']),
+  // Quant & Trading
+  quant: new Set(['citadel','janestreet','sig','twosigma','deshaw','rentec','renaissancetechnologies','mlp','millennium','virtu','virtufinancial','hudsontrading','hrt','jumptrading']),
+  // Other Major Tech
+  other: new Set(['netflix','tesla','uber','airbnb','palantir','crowdstrike','snowflake','intuit','toast','toasttab','workhuman','draftkings','walmart','roblox','doordash','instacart','rivian','chime','wasabi','wasabitechnologies','samsara','blockchain','similarweb','deepmind','googledeepmind'])
 };
 
-function normalizeCompanyName(str) {
-  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function detectTier1Company() {
-  const hostname = normalizeCompanyName(window.location.hostname);
-  const pageText = document.body?.textContent?.toLowerCase() || '';
-  
-  for (const [region, companies] of Object.entries(TIER1_TECH_COMPANIES)) {
-    for (const company of companies) {
-      if (hostname.includes(company) || pageText.includes(company)) {
-        return { company, region, priority: 'tier1' };
-      }
-    }
-  }
-  return null;
-}
-
-// Global success banner message (100% for ALL platforms)
-const SUCCESS_BANNER_MSG = '🚀 ATS TAILOR ✅ Done! Match: 100% - Files attached!';
-
-// Supported ATS platforms (excluding Lever and Ashby)
+// Supported ATS platforms + major company career sites
 const SUPPORTED_HOSTS = [
-  'greenhouse.io',
-  'job-boards.greenhouse.io',
-  'boards.greenhouse.io',
-  'workday.com',
-  'myworkdayjobs.com',
-  'smartrecruiters.com',
-  'bullhornstaffing.com',
-  'bullhorn.com',
-  'teamtailor.com',
-  'workable.com',
-  'apply.workable.com',
-  'icims.com',
-  'oracle.com',
-  'oraclecloud.com',
-  'taleo.net',
+  // Standard ATS
+  'greenhouse.io', 'job-boards.greenhouse.io', 'boards.greenhouse.io',
+  'workday.com', 'myworkdayjobs.com', 'smartrecruiters.com',
+  'bullhornstaffing.com', 'bullhorn.com', 'teamtailor.com',
+  'workable.com', 'apply.workable.com', 'icims.com',
+  'oracle.com', 'oraclecloud.com', 'taleo.net',
+  // Major company career sites (70+)
+  'google.com', 'meta.com', 'amazon.com', 'microsoft.com', 'apple.com',
+  'salesforce.com', 'ibm.com', 'adobe.com', 'stripe.com', 'hubspot.com',
+  'intel.com', 'servicenow.com', 'workhuman.com', 'intercom.com', 'paypal.com',
+  'tiktok.com', 'linkedin.com', 'dropbox.com', 'twilio.com', 'datadoghq.com',
+  'toasttab.com', 'zendesk.com', 'docusign.com', 'fidelity.com', 'sap.com',
+  'morganstanley.com', 'kpmg.com', 'deloitte.com', 'accenture.com', 'pwc.com',
+  'ey.com', 'citadel.com', 'janestreet.com', 'sig.com', 'twosigma.com',
+  'deshaw.com', 'rentec.com', 'mlp.com', 'virtu.com', 'hudsontrading.com',
+  'jumptrading.com', 'broadcom.com', 'slack.com', 'circleci.com', 'unity.com',
+  'bloomberg.com', 'vmware.com', 'mckinsey.com', 'udemy.com', 'draftkings.com',
+  'walmart.com', 'mastercard.com', 'visa.com', 'blackrock.com', 'tdsecurities.com',
+  'kkr.com', 'fenergo.com', 'appliedmaterials.com', 'tsmc.com', 'arm.com',
+  'deepmind.google', 'cisco.com', 'jpmorgan.com', 'gitlab.com', 'atlassian.com',
+  'snap.com', 'capitalone.com', 'wasabi.com', 'samsara.com', 'blockchain.com',
+  'similarweb.com', 'nvidia.com', 'tesla.com', 'uber.com', 'airbnb.com',
+  'palantir.com', 'crowdstrike.com', 'snowflake.com', 'netflix.com', 'amd.com'
 ];
 
 // Performance constants
