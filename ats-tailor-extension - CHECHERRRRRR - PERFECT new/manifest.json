@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ATS Tailor v1.7.0 - Major Career Sites Support",
-  "version": "1.7.0",
-  "description": "v1.7.0: Added 70+ major company career site detection (Google, Meta, HubSpot, Stripe, etc). Full job detection on company career pages. WORKDAY TOP 1 + JD Snapshot.",
+  "name": "ATS Tailor v2.0.0 - Kimi K2 + OpenAI Dual AI",
+  "version": "2.0.0",
+  "description": "v2.0.0: Dual AI support (Kimi K2 primary, OpenAI fallback). Enhanced 70+ company detection. Improved job extraction for HubSpot, Lever, Ashby, LinkedIn, Indeed, Workday.",
   "permissions": [
     "storage",
     "activeTab",
@@ -199,6 +199,8 @@
         "https://explore.jobs.netflix.net/*"
       ],
       "js": [
+        "ai-provider.js",
+        "enhanced-job-extractor.js",
         "mandatory-keywords.js",
         "universal-jd-parser.js",
         "reliable-extractor.js",
