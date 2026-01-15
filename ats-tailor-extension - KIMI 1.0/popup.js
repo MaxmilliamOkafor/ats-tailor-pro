@@ -132,14 +132,14 @@ class ATSTailor {
     }
   }
   
-  // ============ AI PROVIDER TOGGLE LOGIC (Kimi K2 / OpenAI) ============
+  // ============ AI PROVIDER SELECTION WITH PERSISTENCE ============
   
   async loadAIProviderSettings() {
     return new Promise((resolve) => {
-      // FAST LOAD (<50ms): Load AI provider preference immediately on popup open
-      chrome.storage.local.get(['ai_provider', 'kimi_enabled', 'openai_enabled'], (result) => {
-        // Default to Kimi K2 as primary (faster than OpenAI)
+      chrome.storage.local.get(['ai_provider', 'kimi_api_key', 'openai_api_key'], (result) => {
         this.aiProvider = result.ai_provider || 'kimi';
+        this.kimiApiKey = result.kimi_api_key || '';
+        this.openaiApiKey = result.openai_api_key || '';
         console.log('[ATS Tailor] AI Provider loaded:', this.aiProvider);
         resolve();
       });
@@ -147,46 +147,40 @@ class ATSTailor {
   }
   
   async saveAIProviderSettings() {
-    // PERSIST: Save immediately so setting survives popup close/reopen
-    await chrome.storage.local.set({ ai_provider: this.aiProvider });
+    await chrome.storage.local.set({ 
+      ai_provider: this.aiProvider,
+      kimi_api_key: this.kimiApiKey,
+      openai_api_key: this.openaiApiKey
+    });
     console.log('[ATS Tailor] AI Provider saved:', this.aiProvider);
+    this.showToast(`Saved: ${this.aiProvider === 'kimi' ? 'Kimi K2' : 'OpenAI'} selected`, 'success');
   }
   
   updateAIProviderUI() {
-    const toggle = document.getElementById('aiProviderToggle');
-    const kimiStatus = document.getElementById('kimiStatus');
-    const openaiStatus = document.getElementById('openaiStatus');
-    const providerLabel = document.getElementById('currentProviderLabel');
-    const modelLabel = document.getElementById('currentModelLabel');
+    // Update radio buttons
+    const kimiRadio = document.querySelector('input[name="aiProvider"][value="kimi"]');
+    const openaiRadio = document.querySelector('input[name="aiProvider"][value="openai"]');
     
-    if (toggle) {
-      toggle.checked = this.aiProvider === 'openai';
+    if (kimiRadio) kimiRadio.checked = this.aiProvider === 'kimi';
+    if (openaiRadio) openaiRadio.checked = this.aiProvider === 'openai';
+    
+    // Update labels
+    const matchPanelProvider = document.getElementById('matchPanelProvider');
+    const autofillProviderLabel = document.getElementById('autofillProviderLabel');
+    
+    if (matchPanelProvider) {
+      matchPanelProvider.textContent = this.aiProvider === 'kimi' ? 'Kimi K2' : 'OpenAI';
     }
-    
-    if (kimiStatus) {
-      kimiStatus.classList.toggle('active', this.aiProvider === 'kimi');
-    }
-    
-    if (openaiStatus) {
-      openaiStatus.classList.toggle('active', this.aiProvider === 'openai');
-    }
-    
-    if (providerLabel) {
-      providerLabel.textContent = this.aiProvider === 'kimi' ? 'Kimi K2' : 'OpenAI';
-    }
-    
-    if (modelLabel) {
-      modelLabel.textContent = this.aiProvider === 'kimi' ? 'kimi-k2-0711-preview' : 'gpt-4o-mini';
+    if (autofillProviderLabel) {
+      autofillProviderLabel.textContent = this.aiProvider === 'kimi' ? 'Kimi K2' : 'OpenAI';
     }
   }
   
-  toggleAIProvider() {
-    this.aiProvider = this.aiProvider === 'kimi' ? 'openai' : 'kimi';
-    // PERSIST IMMEDIATELY: Save on every toggle so it survives popup close
-    this.saveAIProviderSettings();
+  selectAIProvider(provider) {
+    this.aiProvider = provider;
     this.updateAIProviderUI();
     
-    // Notify content script of provider change for speed optimization
+    // Notify content script
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, {
@@ -195,8 +189,6 @@ class ATSTailor {
         }).catch(() => {});
       }
     });
-    
-    this.showToast(`Switched to ${this.aiProvider === 'kimi' ? 'Kimi K2 (⚡ Faster)' : 'OpenAI'}`, 'success');
   }
   
   // ============ WORKDAY MULTI-PAGE STATE PERSISTENCE ============
@@ -416,8 +408,27 @@ class ATSTailor {
     document.getElementById('downloadCvText')?.addEventListener('click', () => this.downloadTextVersion('cv'));
     document.getElementById('downloadCoverText')?.addEventListener('click', () => this.downloadTextVersion('cover'));
     
-    // AI Provider Toggle (Kimi K2 / OpenAI)
-    document.getElementById('aiProviderToggle')?.addEventListener('change', () => this.toggleAIProvider());
+    // AI Provider Selection (Kimi K2 / OpenAI)
+    document.querySelectorAll('input[name="aiProvider"]').forEach(radio => {
+      radio.addEventListener('change', (e) => this.selectAIProvider(e.target.value));
+    });
+    document.getElementById('saveProviderBtn')?.addEventListener('click', () => this.saveAIProviderSettings());
+    
+    // Autofill toggle
+    document.getElementById('autofillEnabledToggle')?.addEventListener('change', (e) => {
+      chrome.storage.local.set({ autofill_enabled: e.target.checked });
+      this.showToast(e.target.checked ? 'Autofill enabled' : 'Autofill disabled', 'success');
+    });
+    
+    // Manual autofill button
+    document.getElementById('manualAutofillBtn')?.addEventListener('click', () => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'RUN_MANUAL_AUTOFILL' });
+          this.showToast('Running manual autofill...', 'info');
+        }
+      });
+    });
 
     // Bulk Apply Dashboard
     document.getElementById('openBulkApply')?.addEventListener('click', () => {
