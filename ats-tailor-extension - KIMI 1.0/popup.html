@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="container">
-    <!-- Premium Header with AI Provider Toggle -->
+    <!-- Premium Header -->
     <header class="header">
       <div class="logo">
         <img src="icons/icon48.png" alt="QuantumHire AI" class="logo-icon">
@@ -18,14 +18,6 @@
         </div>
       </div>
       <div class="header-controls">
-        <div class="ai-provider-toggle" id="aiProviderToggle" title="Switch AI Provider">
-          <span class="provider-label provider-openai" id="providerOpenAI">OpenAI</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="aiProviderSwitch">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="provider-label provider-kimi active" id="providerKimi">Kimi K2</span>
-        </div>
         <div class="status-indicator" id="statusIndicator">
           <span class="status-dot"></span>
           <span class="status-text">Ready</span>
@@ -67,17 +59,46 @@
         <button id="logoutBtn" class="btn-link">Logout</button>
       </div>
 
-      <!-- AI Provider Status Banner -->
-      <div class="ai-status-banner" id="aiStatusBanner">
-        <div class="ai-status-left">
-          <span class="ai-icon" id="aiProviderIcon">🚀</span>
-          <div class="ai-status-info">
-            <span class="ai-provider-name" id="activeProviderName">Kimi K2</span>
-            <span class="ai-provider-model" id="activeProviderModel">kimi-k2-0711-preview</span>
-          </div>
+      <!-- AI Provider Selection Panel -->
+      <div class="ai-provider-panel" id="aiProviderPanel">
+        <div class="provider-header">
+          <span class="provider-icon">🤖</span>
+          <span class="provider-title">AI Provider</span>
+          <button id="saveProviderBtn" class="btn btn-small btn-accent" title="Save selection">💾 Save</button>
         </div>
-        <div class="ai-status-right">
-          <span class="ai-speed-badge" id="aiSpeedBadge">⚡ Fast</span>
+        <div class="provider-options">
+          <label class="provider-option" id="kimiOption">
+            <input type="radio" name="aiProvider" value="kimi" checked>
+            <div class="provider-card">
+              <div class="provider-logo">🚀</div>
+              <div class="provider-info">
+                <span class="provider-name">Kimi K2</span>
+                <span class="provider-model">kimi-k2-0711-preview</span>
+                <span class="provider-speed">⚡ Fast</span>
+              </div>
+            </div>
+          </label>
+          <label class="provider-option" id="openaiOption">
+            <input type="radio" name="aiProvider" value="openai">
+            <div class="provider-card">
+              <div class="provider-logo">🧠</div>
+              <div class="provider-info">
+                <span class="provider-name">OpenAI</span>
+                <span class="provider-model">gpt-4o-mini</span>
+                <span class="provider-speed">💪 Powerful</span>
+              </div>
+            </div>
+          </label>
+        </div>
+        <div class="provider-api-key hidden" id="providerApiKeySection">
+          <div class="input-group-small">
+            <label for="kimiApiKey">Kimi API Key</label>
+            <input type="password" id="kimiApiKey" placeholder="sk-...">
+          </div>
+          <div class="input-group-small">
+            <label for="openaiApiKey">OpenAI API Key</label>
+            <input type="password" id="openaiApiKey" placeholder="sk-...">
+          </div>
         </div>
       </div>
 
@@ -319,18 +340,6 @@
           </div>
         </div>
 
-        <!-- ATS Match Section (legacy compact view) -->
-        <div class="ats-match-section hidden" id="atsMatchSection">
-          <div class="ats-match-header">
-            <span class="ats-label">ATS Match</span>
-            <span class="ats-score" id="atsMatchScore">0%</span>
-          </div>
-          <div class="ats-keywords hidden" id="atsKeywords">
-            <div class="keywords-matched" id="matchedKeywords"></div>
-            <div class="keywords-missing" id="missingKeywords"></div>
-          </div>
-        </div>
-
         <h3 class="documents-title">📄 Generated Documents</h3>
         
         <!-- Document Items -->
@@ -518,14 +527,14 @@
               </label>
             </div>
             
-            <!-- NEW: Automatic Autofill Toggle -->
+            <!-- Automatic Autofill Toggle -->
             <div class="workday-auto-row">
               <label class="toggle-row" for="autofillEnabledToggle">
                 <span class="toggle-label">🤖 Automatic Autofill (AI-Powered)</span>
                 <input type="checkbox" id="autofillEnabledToggle" checked />
               </label>
             </div>
-            <p class="setting-help">Uses Kimi K2 AI to intelligently answer screening questions that pass knockout filters.</p>
+            <p class="setting-help">Uses <span id="autofillProviderLabel">Kimi K2</span> AI to intelligently answer screening questions that pass knockout filters.</p>
             
             <!-- Saved Responses Panel -->
             <details class="saved-responses-section">
@@ -548,7 +557,7 @@
               <span class="btn-text">Run Full Workday Flow</span>
             </button>
             
-            <!-- NEW: Manual Autofill Button -->
+            <!-- Manual Autofill Button -->
             <button id="manualAutofillBtn" class="btn btn-accent btn-full" style="margin-top: 8px;">
               <span class="btn-icon">🤖</span>
               <span class="btn-text">Run Manual Autofill</span>
@@ -588,7 +597,7 @@
 
       <!-- Footer with Dashboard Link -->
       <div class="popup-footer">
-        <a href="https://id-preview--2777be38-8dd2-4b20-ad45-fa61a1988fa3.lovable.app" target="_blank" class="dashboard-link">
+        <a href="https://id-preview--91b39976-6aab-4a4b-9890-bb0138b5d93d.lovable.app" target="_blank" class="dashboard-link">
           <span class="link-icon">📊</span>
           <span>Open Dashboard</span>
           <span class="link-arrow">→</span>
