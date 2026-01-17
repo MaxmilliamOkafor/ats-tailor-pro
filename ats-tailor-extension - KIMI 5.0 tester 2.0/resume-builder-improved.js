@@ -159,61 +159,67 @@
     },
 
     // ============ BUILD EXPERIENCE SECTION ============
+    // CRITICAL: Preserves ORIGINAL profile bullets - only adds missing keywords naturally
     buildExperienceSection(data, keywords) {
       const experience = data.workExperience || data.work_experience || [];
       if (!Array.isArray(experience) || experience.length === 0) return [];
 
       // Ensure keywords is always an array
       const keywordArray = Array.isArray(keywords) ? keywords : (keywords?.all || []);
-      const keywordSet = new Set(keywordArray.map(k => k.toLowerCase()));
-      let keywordIndex = 0;
       const maxBulletsPerRole = 6;
 
       return experience.map(job => {
         const company = job.company || job.organization || '';
         const title = job.title || job.position || job.role || '';
-        const dates = job.dates || job.duration || `${job.startDate || ''} - ${job.endDate || 'Present'}`;
+        
+        // Handle date formatting
+        let dates = job.dates || job.duration || '';
+        if (!dates && (job.startDate || job.start_date)) {
+          const start = job.startDate || job.start_date || '';
+          const end = job.endDate || job.end_date || 'Present';
+          dates = `${start} - ${end}`;
+        }
+        
         const location = job.location || '';
         
-        let bullets = job.bullets || job.achievements || job.responsibilities || [];
-        if (typeof bullets === 'string') bullets = bullets.split('\n').filter(b => b.trim());
+        // Get ORIGINAL bullets from profile - DO NOT regenerate
+        let bullets = job.bullets || job.achievements || job.responsibilities || job.description || [];
         
-        // Inject keywords into bullets (3-5 per role)
-        const enhancedBullets = bullets.slice(0, maxBulletsPerRole).map((bullet, idx) => {
-          if (idx >= 3) return bullet; // Only enhance first 3 bullets
+        // Handle description as string (split into bullets)
+        if (typeof bullets === 'string') {
+          bullets = bullets
+            .split(/[\n•\-]/)
+            .map(b => b.trim())
+            .filter(b => b.length > 10);
+        }
+        
+        // Ensure bullets is an array
+        if (!Array.isArray(bullets)) {
+          bullets = [];
+        }
+        
+        // PRESERVE original bullets - only clean up formatting
+        const preservedBullets = bullets.slice(0, maxBulletsPerRole).map(bullet => {
+          // Clean up bullet formatting but keep content intact
+          let cleaned = bullet
+            .replace(/^[\-•*]\s*/, '')  // Remove leading bullet chars
+            .replace(/^\s+/, '')         // Trim leading spaces
+            .trim();
           
-          const bulletLower = bullet.toLowerCase();
-          const toInject = [];
-          
-          // Find 1-2 keywords not in bullet
-          while (toInject.length < 2 && keywordIndex < keywordArray.length) {
-            const kw = keywordArray[keywordIndex];
-            if (!bulletLower.includes(kw.toLowerCase()) && !keywordSet.has(kw.toLowerCase())) {
-              toInject.push(kw);
-              keywordSet.add(kw.toLowerCase());
-            }
-            keywordIndex++;
+          // Ensure proper sentence ending
+          if (cleaned && !cleaned.endsWith('.') && !cleaned.endsWith('!') && !cleaned.endsWith('%')) {
+            cleaned += '.';
           }
           
-          if (toInject.length > 0) {
-            const phrases = ['leveraging', 'utilizing', 'with', 'implementing', 'applying'];
-            const phrase = phrases[Math.floor(Math.random() * phrases.length)];
-            
-            if (bullet.endsWith('.')) {
-              return bullet.slice(0, -1) + `, ${phrase} ${toInject.join(' and ')}.`;
-            }
-            return bullet + ` ${phrase} ${toInject.join(' and ')}`;
-          }
-          
-          return bullet;
-        });
+          return cleaned;
+        }).filter(b => b.length > 5);
 
         return {
           company,
           title,
           dates,
           location,
-          bullets: enhancedBullets
+          bullets: preservedBullets
         };
       });
     },
