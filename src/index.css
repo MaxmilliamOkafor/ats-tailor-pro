@@ -156,19 +156,27 @@
   }
 
   .status-applied {
-    @apply bg-info/10 text-info border-info/20;
+    background-color: hsl(var(--info) / 0.1);
+    color: hsl(var(--info));
+    border-color: hsl(var(--info) / 0.2);
   }
 
   .status-interviewing {
-    @apply bg-warning/10 text-warning border-warning/20;
+    background-color: hsl(var(--warning) / 0.1);
+    color: hsl(var(--warning));
+    border-color: hsl(var(--warning) / 0.2);
   }
 
   .status-offered {
-    @apply bg-success/10 text-success border-success/20;
+    background-color: hsl(var(--success) / 0.1);
+    color: hsl(var(--success));
+    border-color: hsl(var(--success) / 0.2);
   }
 
   .status-rejected {
-    @apply bg-destructive/10 text-destructive border-destructive/20;
+    background-color: hsl(var(--destructive) / 0.1);
+    color: hsl(var(--destructive));
+    border-color: hsl(var(--destructive) / 0.2);
   }
 }
 
