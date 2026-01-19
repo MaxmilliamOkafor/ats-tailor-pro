@@ -159,54 +159,80 @@
     },
 
     // ============ BUILD EXPERIENCE SECTION ============
+    // SINGLE SOURCE OF TRUTH: profile.work_experience
+    // NEVER modify company, title, dates - only append keywords to bullets
     buildExperienceSection(data, keywords) {
       const experience = data.workExperience || data.work_experience || [];
       if (!Array.isArray(experience) || experience.length === 0) return [];
 
       // Ensure keywords is always an array
       const keywordArray = Array.isArray(keywords) ? keywords : (keywords?.all || []);
-      const keywordSet = new Set(keywordArray.map(k => k.toLowerCase()));
-      let keywordIndex = 0;
+      const usedKeywords = new Set();
       const maxBulletsPerRole = 6;
 
       return experience.map(job => {
-        const company = job.company || job.organization || '';
-        const title = job.title || job.position || job.role || '';
-        const dates = job.dates || job.duration || `${job.startDate || ''} - ${job.endDate || 'Present'}`;
+        // READ-ONLY from profile - NEVER modify these fields
+        const company = job.company || '';
+        const title = job.title || '';
+        
+        // Build dates - avoid duplicating
+        let dates = '';
+        if (job.dates) {
+          dates = job.dates;
+        } else if (job.startDate || job.endDate) {
+          const start = job.startDate || '';
+          const end = job.endDate || 'Present';
+          dates = start ? `${start} - ${end}` : end;
+        }
+        
         const location = job.location || '';
         
+        // Get bullets from profile - preserve original content
         let bullets = job.bullets || job.achievements || job.responsibilities || [];
         if (typeof bullets === 'string') bullets = bullets.split('\n').filter(b => b.trim());
         
-        // Inject keywords into bullets (3-5 per role)
+        // Inject keywords into bullets - ONLY append, never rewrite
         const enhancedBullets = bullets.slice(0, maxBulletsPerRole).map((bullet, idx) => {
-          if (idx >= 3) return bullet; // Only enhance first 3 bullets
+          // Clean bullet text
+          let text = (bullet || '').replace(/^\s*[-•]\s*/, '').trim();
+          if (!text) return '';
           
-          const bulletLower = bullet.toLowerCase();
+          // Only enhance first 3 bullets per role
+          if (idx >= 3) {
+            if (!text.endsWith('.')) text += '.';
+            return text;
+          }
+          
+          const bulletLower = text.toLowerCase();
           const toInject = [];
           
-          // Find 1-2 keywords not in bullet
-          while (toInject.length < 2 && keywordIndex < keywordArray.length) {
-            const kw = keywordArray[keywordIndex];
-            if (!bulletLower.includes(kw.toLowerCase()) && !keywordSet.has(kw.toLowerCase())) {
+          // Find 1-2 keywords not in bullet and not already used
+          for (let i = 0; i < keywordArray.length && toInject.length < 2; i++) {
+            const kw = keywordArray[i];
+            if (!kw) continue;
+            const kwLower = kw.toLowerCase();
+            if (!bulletLower.includes(kwLower) && !usedKeywords.has(kwLower)) {
               toInject.push(kw);
-              keywordSet.add(kw.toLowerCase());
+              usedKeywords.add(kwLower);
             }
-            keywordIndex++;
           }
           
           if (toInject.length > 0) {
-            const phrases = ['leveraging', 'utilizing', 'with', 'implementing', 'applying'];
+            // UK spelling for injection phrases
+            const phrases = ['leveraging', 'utilising', 'through', 'with', 'via'];
             const phrase = phrases[Math.floor(Math.random() * phrases.length)];
             
-            if (bullet.endsWith('.')) {
-              return bullet.slice(0, -1) + `, ${phrase} ${toInject.join(' and ')}.`;
+            if (text.endsWith('.')) {
+              text = text.slice(0, -1) + `, ${phrase} ${toInject.join(' and ')}.`;
+            } else {
+              text = `${text}, ${phrase} ${toInject.join(' and ')}.`;
             }
-            return bullet + ` ${phrase} ${toInject.join(' and ')}`;
+          } else {
+            if (!text.endsWith('.')) text += '.';
           }
           
-          return bullet;
-        });
+          return text;
+        }).filter(Boolean);
 
         return {
           company,
@@ -219,6 +245,7 @@
     },
 
     // ============ BUILD EDUCATION SECTION ============
+    // IMPORTANT: Remove explicit year ranges to prevent age bias
     buildEducationSection(data) {
       const education = data.education || [];
       if (!Array.isArray(education) || education.length === 0) return [];
@@ -226,13 +253,13 @@
       return education.map(edu => {
         const institution = edu.institution || edu.school || edu.university || '';
         const degree = edu.degree || '';
-        const date = edu.dates || edu.graduationDate || '';
+        // REMOVED: date to prevent age bias
         const gpa = edu.gpa ? `GPA: ${edu.gpa}` : '';
         
         return {
           institution,
           degree,
-          date,
+          date: '', // Empty - no dates to prevent age bias
           gpa
         };
       });

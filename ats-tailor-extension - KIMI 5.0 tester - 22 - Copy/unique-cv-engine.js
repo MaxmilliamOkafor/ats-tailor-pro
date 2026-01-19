@@ -31,9 +31,9 @@
     'Architected {keyword1} {achievement} boosting {metric}'
   ];
 
-  // ============ NATURAL INJECTION PHRASES ============
+  // ============ NATURAL INJECTION PHRASES (UK SPELLING) ============
   const INJECTION_PHRASES = [
-    'leveraging', 'utilizing', 'through', 'via', 'employing',
+    'leveraging', 'utilising', 'through', 'via', 'employing',
     'incorporating', 'with expertise in', 'applying'
   ];
 

@@ -182,8 +182,8 @@
       return bulletPrefix + text;
     }
     
-    // Natural injection phrases - varied for readability
-    const phrases = ['leveraging', 'utilizing', 'through', 'with', 'via'];
+    // Natural injection phrases - UK spelling for readability
+    const phrases = ['leveraging', 'utilising', 'through', 'with', 'via'];
     const getPhrase = () => phrases[Math.floor(Math.random() * phrases.length)];
     
     // ONLY append to end - never modify the original bullet content
@@ -195,7 +195,7 @@
     }
     
     // Otherwise append
-    return `${bulletPrefix}${text}, ${getPhrase()} ${keyword}`;
+    return `${bulletPrefix}${text}, ${getPhrase()} ${keyword}.`;
   }
 
   // ============ KEYWORD INJECTION ============
@@ -289,10 +289,19 @@
     const lines = experienceText.split('\n');
     const bulletPattern = /^(\s*[-•●○◦▪▸►]\s*)(.+)$/;
     
-    // Get all bullet line indices
+    // Known company names to protect from modification
+    const PROTECTED_COMPANIES = ['meta', 'solimhealth', 'solim', 'accenture', 'citigroup', 'citi', 'google', 'amazon', 'microsoft', 'apple', 'facebook', 'netflix', 'stripe', 'salesforce', 'ibm', 'oracle', 'adobe'];
+    
+    // Get all bullet line indices (excluding header lines)
     const bulletIndices = [];
     lines.forEach((line, idx) => {
-      if (bulletPattern.test(line) && line.length > 30) {
+      const trimmed = line.trim();
+      // Skip header lines (contain | and company names)
+      const lineHasPipe = trimmed.includes('|');
+      const lineHasCompany = PROTECTED_COMPANIES.some(c => trimmed.toLowerCase().includes(c));
+      const isHeader = (lineHasPipe && lineHasCompany) || /^\d{4}\s*[-–]\s*(Present|\d{4})/i.test(trimmed);
+      
+      if (bulletPattern.test(line) && line.length > 30 && !isHeader) {
         bulletIndices.push(idx);
       }
     });
