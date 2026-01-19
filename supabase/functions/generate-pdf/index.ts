@@ -313,24 +313,27 @@ serve(async (req) => {
       }
 
       // === EDUCATION ===
+      // IMPORTANT: Remove explicit year ranges to prevent age bias
       if (sanitizedData.education && sanitizedData.education.length > 0) {
         drawSectionHeader('Education');
         
         for (const edu of sanitizedData.education) {
           ensureSpace(30);
           
-          // Degree and dates
-          const degreeLine = `${edu.degree} | ${edu.dates}`;
-          currentPage.drawText(degreeLine, {
-            x: MARGIN,
-            y: yPosition,
-            size: 11,
-            font: helveticaBold,
-            color: colors.black,
-          });
-          yPosition -= LINE_HEIGHT;
+          // Degree only - NO dates to prevent age bias
+          const degreeLine = edu.degree || '';
+          if (degreeLine) {
+            currentPage.drawText(degreeLine, {
+              x: MARGIN,
+              y: yPosition,
+              size: 11,
+              font: helveticaBold,
+              color: colors.black,
+            });
+            yPosition -= LINE_HEIGHT;
+          }
 
-          // School and GPA
+          // School and GPA (no dates)
           const schoolLine = edu.gpa ? `${edu.school} | GPA: ${edu.gpa}` : edu.school;
           currentPage.drawText(schoolLine, {
             x: MARGIN,

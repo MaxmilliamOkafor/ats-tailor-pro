@@ -153,100 +153,113 @@
     },
 
     
-    // BUILD EXPERIENCE SECTION
-buildExperienceSection(data, keywords) {
-  // 1) Always trust structured workExperience as the single source of truth
-  const experience = Array.isArray(data.workExperience)
-    ? data.workExperience
-    : (Array.isArray(data.workexperience) ? data.workexperience : []);
+    // BUILD EXPERIENCE SECTION - SINGLE SOURCE OF TRUTH: profile.work_experience
+    // NEVER modify company, title, dates - only append keywords to bullets
+    buildExperienceSection(data, keywords) {
+      // 1) SINGLE SOURCE OF TRUTH: structured work_experience from profile
+      const experience = Array.isArray(data.workExperience)
+        ? data.workExperience
+        : (Array.isArray(data.work_experience) 
+            ? data.work_experience 
+            : (Array.isArray(data.workexperience) ? data.workexperience : []));
 
-  if (!experience.length) return "";
+      if (!experience.length) return "";
 
-  // 2) Normalise keywords, but NEVER touch company/title/dates
-  const keywordArray = Array.isArray(keywords) ? keywords : (keywords?.all || []);
-  const keywordSet = new Set(keywordArray.map(k => k.toLowerCase()));
-  let keywordIndex = 0;
-  const maxBulletsPerRole = 8;
+      // 2) Normalise keywords for injection, but NEVER touch company/title/dates
+      const keywordArray = Array.isArray(keywords) ? keywords : (keywords?.all || []);
+      const usedKeywords = new Set();
+      const maxBulletsPerRole = 8;
 
-  return experience
-    .map((job) => {
-      // ---- HEADER: read-only from profile ----
-      const company = job.company;
-      const title   = job.title;
-      const dates =
-        job.dates ||
-        (job.startDate && job.endDate
-          ? `${job.startDate} - ${job.endDate}`
-          : (job.startDate || job.endDate || ""));
-      const location = job.location;
-
-      const headerParts = [];
-      if (company)  headerParts.push(company);
-      if (title)    headerParts.push(title);
-      if (dates)    headerParts.push(dates);
-      if (location) headerParts.push(location);
-
-      const headerLine = headerParts.join(" | ");
-
-      // ---- BULLETS: keyword-enriched but content preserved ----
-      let bullets = job.bullets || job.achievements || job.responsibilities || [];
-
-      if (typeof bullets === "string") {
-        bullets = bullets
-          .split("\n")
-          .map(b => b.trim())
-          .filter(Boolean);
-      }
-
-      if (!Array.isArray(bullets) || !bullets.length) {
-        return headerLine;
-      }
-
-      const enhancedBullets = bullets.slice(0, maxBulletsPerRole).map((bullet, idx) => {
-        let text = (bullet || "").replace(/^\s*[-•]\s*/, "").trim();
-        if (!text) return "";
-
-        // Only enhance first 3 bullets per role
-        if (idx >= 3 || !keywordArray.length) {
-          return `- ${text}`;
-        }
-
-        const bulletLower = text.toLowerCase();
-        const toInject = [];
-
-        // Inject at most 2 keywords not already in the bullet
-        while (toInject.length < 2 && keywordIndex < keywordArray.length) {
-          const kw = keywordArray[keywordIndex++];
-          if (!kw) break;
-          const kwLower = kw.toLowerCase();
-          if (!bulletLower.includes(kwLower) && !keywordSet.has(kwLower)) {
-            toInject.push(kw);
-            keywordSet.add(kwLower);
+      return experience
+        .map((job) => {
+          // ---- HEADER: READ-ONLY from profile - NEVER modify ----
+          const company = job.company || '';
+          const title = job.title || '';
+          
+          // Build dates - avoid duplicating "Present" or year ranges
+          let dates = '';
+          if (job.dates) {
+            dates = job.dates;
+          } else if (job.startDate || job.endDate) {
+            const start = job.startDate || '';
+            const end = job.endDate || 'Present';
+            dates = start ? `${start} - ${end}` : end;
           }
-        }
+          
+          const location = job.location || '';
 
-        if (!toInject.length) {
-          return `- ${text}`;
-        }
+          // Build header line: Company | Title | Dates | Location
+          const headerParts = [];
+          if (company) headerParts.push(company);
+          if (title) headerParts.push(title);
+          if (dates) headerParts.push(dates);
+          if (location) headerParts.push(location);
 
-        // UK spelling for phrases
-        const phrases = ["leveraging", "utilising", "through", "with", "via"];
-        const phrase = phrases[Math.floor(Math.random() * phrases.length)];
-        const tail = `${phrase} ${toInject.join(" and ")}`;
+          const headerLine = headerParts.join(" | ");
 
-        if (text.endsWith(".")) {
-          text = `${text.slice(0, -1)}, ${tail}.`;
-        } else {
-          text = `${text}, ${tail}`;
-        }
+          // ---- BULLETS: Preserve original content, only APPEND keywords ----
+          let bullets = job.bullets || job.achievements || job.responsibilities || [];
 
-        return `- ${text}`;
-      }).filter(Boolean);
+          if (typeof bullets === "string") {
+            bullets = bullets
+              .split("\n")
+              .map(b => b.trim())
+              .filter(Boolean);
+          }
 
-      return `${headerLine}\n${enhancedBullets.join("\n")}`;
-    })
-    .join("\n\n");
-},
+          if (!Array.isArray(bullets) || !bullets.length) {
+            return headerLine;
+          }
+
+          const enhancedBullets = bullets.slice(0, maxBulletsPerRole).map((bullet, idx) => {
+            // Clean bullet prefix
+            let text = (bullet || "").replace(/^\s*[-•]\s*/, "").trim();
+            if (!text) return "";
+
+            // Only enhance first 3 bullets per role
+            if (idx >= 3 || !keywordArray.length) {
+              // Ensure proper sentence ending
+              if (text && !text.endsWith('.')) text += '.';
+              return `- ${text}`;
+            }
+
+            const bulletLower = text.toLowerCase();
+            const toInject = [];
+
+            // Inject at most 2 keywords not already in the bullet and not already used
+            for (let i = 0; i < keywordArray.length && toInject.length < 2; i++) {
+              const kw = keywordArray[i];
+              if (!kw) continue;
+              const kwLower = kw.toLowerCase();
+              if (!bulletLower.includes(kwLower) && !usedKeywords.has(kwLower)) {
+                toInject.push(kw);
+                usedKeywords.add(kwLower);
+              }
+            }
+
+            if (!toInject.length) {
+              if (text && !text.endsWith('.')) text += '.';
+              return `- ${text}`;
+            }
+
+            // UK spelling for injection phrases
+            const phrases = ["leveraging", "utilising", "through", "with", "via"];
+            const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+            const tail = `${phrase} ${toInject.join(" and ")}`;
+
+            if (text.endsWith(".")) {
+              text = `${text.slice(0, -1)}, ${tail}.`;
+            } else {
+              text = `${text}, ${tail}.`;
+            }
+
+            return `- ${text}`;
+          }).filter(Boolean);
+
+          return `${headerLine}\n${enhancedBullets.join("\n")}`;
+        })
+        .join("\n\n");
+    },
 
 
     // ============ BUILD SKILLS SECTION ============
@@ -270,6 +283,7 @@ buildExperienceSection(data, keywords) {
     },
 
     // ============ BUILD EDUCATION SECTION ============
+    // IMPORTANT: Remove explicit year ranges to prevent age bias
     buildEducationSection(data) {
       const education = data.education || [];
       if (!Array.isArray(education) || education.length === 0) return '';
@@ -277,10 +291,10 @@ buildExperienceSection(data, keywords) {
       return education.map(edu => {
         const institution = edu.institution || edu.school || edu.university || '';
         const degree = edu.degree || '';
-        const dates = edu.dates || edu.graduationDate || '';
+        // REMOVED: dates to prevent age bias
         const gpa = edu.gpa ? `GPA: ${edu.gpa}` : '';
         
-        return [institution, degree, dates, gpa].filter(Boolean).join(' | ');
+        return [degree, institution, gpa].filter(Boolean).join(' | ');
       }).join('\n');
     },
 

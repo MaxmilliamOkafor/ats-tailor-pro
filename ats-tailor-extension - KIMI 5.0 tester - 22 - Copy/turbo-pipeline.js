@@ -241,13 +241,16 @@
       { name: 'Role 4', maxKeywordsPerBullet: 2, maxBullets: 3 }
     ];
     
-    // Natural injection phrases (varied for authenticity)
+    // Natural injection phrases (UK spelling for authenticity)
     const phrases = [
-      'leveraging', 'utilizing', 'implementing', 'applying', 'with expertise in',
+      'leveraging', 'utilising', 'implementing', 'applying', 'with expertise in',
       'through', 'incorporating', 'employing', 'using', 'via'
     ];
     const getPhrase = () => phrases[Math.floor(Math.random() * phrases.length)];
 
+    // Known company names to protect from modification
+    const PROTECTED_COMPANIES = ['meta', 'solimhealth', 'solim', 'accenture', 'citigroup', 'citi', 'google', 'amazon', 'microsoft', 'apple', 'facebook', 'netflix', 'stripe', 'salesforce', 'ibm', 'oracle', 'adobe'];
+    
     // Split into lines and identify role boundaries
     const lines = experienceSection.split('\n');
     let roleIndex = 0;
@@ -259,20 +262,25 @@
       const trimmed = line.trim();
       
       // Detect role header (Company | Title | Date or similar patterns)
-      const isRoleHeader = /^[A-Z][A-Za-z\s&.,]+\s*\|/.test(trimmed) || 
-                          /^(Meta|Solim|Accenture|Citigroup|Google|Amazon|Microsoft)/i.test(trimmed);
+      // PROTECT HEADERS: Never modify lines containing company names and pipe separators
+      const lineHasPipe = trimmed.includes('|');
+      const lineHasCompany = PROTECTED_COMPANIES.some(c => trimmed.toLowerCase().includes(c));
+      const isRoleHeader = (lineHasPipe && lineHasCompany) ||
+                          /^[A-Z][A-Za-z\s&.,]+\s*\|/.test(trimmed) || 
+                          /^(Meta|Solim|Accenture|Citigroup|Citi|Google|Amazon|Microsoft|Apple|Facebook|Netflix|Stripe|Salesforce|IBM|Oracle|Adobe)/i.test(trimmed) ||
+                          /^\d{4}\s*[-–]\s*(Present|\d{4})/i.test(trimmed); // Date lines
       
       if (isRoleHeader) {
         roleIndex++;
         bulletCountInRole = 0;
-        modifiedLines.push(line);
+        modifiedLines.push(line); // PRESERVE HEADER UNCHANGED
         continue;
       }
       
-      // Process bullet points
+      // Process bullet points ONLY
       const isBullet = /^[-•*▪▸]\s/.test(trimmed) || /^▪\s/.test(trimmed);
       if (!isBullet) {
-        modifiedLines.push(line);
+        modifiedLines.push(line); // PRESERVE NON-BULLET LINES UNCHANGED
         continue;
       }
       

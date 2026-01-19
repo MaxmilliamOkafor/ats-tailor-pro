@@ -739,6 +739,20 @@ serve(async (req) => {
 
 CRITICAL MISSION: Achieve 95-100% ATS KEYWORD MATCH while sounding HUMAN and natural.
 
+=== LANGUAGE REQUIREMENT: ENGLISH (UK) SPELLING ===
+ALL outputs (CV, bullets, summaries, cover letters) MUST use British English spelling:
+- "optimised" NOT "optimized"
+- "utilising" NOT "utilizing"  
+- "organisation" NOT "organization"
+- "behaviour" NOT "behavior"
+- "modelling" NOT "modeling"
+- "analyse" NOT "analyze"
+- "colour" NOT "color"
+- "centre" NOT "center"
+- "programme" (for initiatives) NOT "program"
+- "organisation" NOT "organization"
+=== END LANGUAGE REQUIREMENT ===
+
 KEYWORD INTEGRATION STRATEGY (MANDATORY):
 - Current match: ${matchResult.matched.length}/${jdKeywords.allKeywords.length} keywords (${Math.round(currentMatchPercent)}%)
 - Target: 95-100% match (need to add ${keywordsNeededFor95} more keywords)
@@ -771,12 +785,12 @@ The PROFESSIONAL SUMMARY section MUST:
 VIOLATION = INSTANT REJECTION. The summary describes qualifications ONLY.
 === END CRITICAL RULE ===
 
-HUMANIZED TONE RULES:
+HUMANISED TONE RULES (UK spelling):
 - Active voice only
 - Vary sentence structure - avoid repetitive patterns
 - Use connectors: "This enabled...", "Resulting in...", "Which led to..."
 - BANNED: "results-driven", "dynamic", "cutting-edge", "passionate", "leverage", "synergy"
-- Include specific metrics (%, $, time saved, users impacted)
+- Include specific metrics (%, £, time saved, users impacted)
 
 ATS KEYWORD DENSITY TARGETS:
 - Hard Skills: Each must appear 2-3 times across resume

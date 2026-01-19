@@ -47,7 +47,7 @@
     ])
   };
 
-  // ============ INJECTION TEMPLATES ============
+  // ============ INJECTION TEMPLATES (UK SPELLING) ============
   const INJECTION_TEMPLATES = {
     // Technical keyword templates
     TECHNICAL: [
@@ -69,9 +69,9 @@
       'mentored team on [KEYWORD1] and [KEYWORD2]',
       'led [KEYWORD1] transformation with [KEYWORD2] focus'
     ],
-    // Impact templates
+    // Impact templates (UK spelling: optimised)
     IMPACT: [
-      'optimized [KEYWORD1] reducing [METRIC] by X%',
+      'optimised [KEYWORD1] reducing [METRIC] by X%',
       'improved [KEYWORD1] efficiency through [KEYWORD2]',
       'delivered [KEYWORD1] project [METRIC] under budget'
     ]
@@ -236,9 +236,9 @@
         const toInject = kwsToAdd.filter(kw => !bulletLower.includes(kw.toLowerCase()));
         if (toInject.length === 0) return;
 
-        // TEMPLATE: "[Action] [KEYWORD1]/[KEYWORD2] [existing content] using [KEYWORD3]"
+        // TEMPLATE: "[Action] [KEYWORD1]/[KEYWORD2] [existing content] using [KEYWORD3]" (UK spelling)
         if (toInject.length === 1) {
-          enhanced = bullet.replace(/\.?\s*$/, `, incorporating ${toInject[0]} principles.`);
+          enhanced = bullet.replace(/\.?\s*$/, `, utilising ${toInject[0]} principles.`);
         } else if (toInject.length === 2) {
           enhanced = bullet.replace(/\.?\s*$/, ` with ${toInject[0]} and ${toInject[1]}.`);
         } else {
