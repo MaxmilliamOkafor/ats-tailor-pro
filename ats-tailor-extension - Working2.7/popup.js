@@ -2685,7 +2685,7 @@ class ATSTailor {
 
       // Fetch user profile (API call) - includes CV file info
       const profileRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,cover_letter,professional_experience,education,skills,certifications,achievements,ats_strategy,city,country,address,state,zip_code,cv_file_path,cv_file_name,cv_uploaded_at,preferred_ai_provider`,
+        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,cover_letter,professional_experience,work_experience,relevant_projects,education,skills,certifications,achievements,ats_strategy,city,country,address,state,zip_code,cv_file_path,cv_file_name,cv_uploaded_at,preferred_ai_provider`,
         {
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -2768,7 +2768,11 @@ class ATSTailor {
             github: p.github || '',
             portfolio: p.portfolio || '',
             coverLetter: p.cover_letter || '',
-            professionalExperience: Array.isArray(p.professional_experience) ? p.professional_experience : [],
+            // CANONICAL: work_experience is the single source of truth
+            // Use professional_experience with fallback to work_experience for backward compatibility
+            workExperience: Array.isArray(p.professional_experience) ? p.professional_experience : (Array.isArray(p.work_experience) ? p.work_experience : []),
+            // RELEVANT PROJECTS: Include as separate section for CV generation
+            relevantProjects: Array.isArray(p.relevant_projects) ? p.relevant_projects : [],
             education: Array.isArray(p.education) ? p.education : [],
             skills: Array.isArray(p.skills) ? p.skills : [],
             certifications: Array.isArray(p.certifications) ? p.certifications : [],

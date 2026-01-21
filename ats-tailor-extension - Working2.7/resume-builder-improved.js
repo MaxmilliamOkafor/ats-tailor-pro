@@ -78,6 +78,7 @@
         contact: this.buildContactSection(candidateData),
         summary: this.buildSummarySection(candidateData, keywords),
         experience: this.buildExperienceSection(candidateData, keywords),
+        projects: this.buildProjectsSection(candidateData, keywords),
         education: this.buildEducationSection(candidateData),
         skills: this.buildSkillsSection(candidateData, keywords),
         certifications: this.buildCertificationsSection(candidateData)
@@ -159,11 +160,21 @@
     },
 
     // ============ BUILD EXPERIENCE SECTION ============
-    // SINGLE SOURCE OF TRUTH: profile.work_experience
+    // SINGLE SOURCE OF TRUTH: work_experience (with fallbacks for backward compatibility)
     // NEVER modify company, title, dates - only append keywords to bullets
     // CLEAN LAYOUT: Line 1 = Company, Line 2 = Title – YYYY – YYYY
     buildExperienceSection(data, keywords) {
-      const experience = data.workExperience || data.work_experience || [];
+      // CANONICAL: work_experience is the single source of truth
+      // Fallback chain: workExperience > work_experience > professionalExperience > professional_experience
+      const experience = Array.isArray(data.workExperience)
+        ? data.workExperience
+        : (Array.isArray(data.work_experience)
+            ? data.work_experience
+            : (Array.isArray(data.professionalExperience)
+                ? data.professionalExperience
+                : (Array.isArray(data.professional_experience)
+                    ? data.professional_experience
+                    : [])));
       if (!Array.isArray(experience) || experience.length === 0) return [];
 
       // Ensure keywords is always an array
@@ -256,6 +267,79 @@
           titleLine, // New: formatted title with dates
           dates: normalisedDates,
           location,
+          bullets: enhancedBullets
+        };
+      });
+    },
+
+    // ============ BUILD PROJECTS SECTION (RELEVANT PROJECTS FROM PROFILE) ============
+    buildProjectsSection(data, keywords) {
+      const projects = Array.isArray(data.relevantProjects)
+        ? data.relevantProjects
+        : (Array.isArray(data.relevant_projects)
+            ? data.relevant_projects
+            : []);
+
+      if (!projects.length) return [];
+
+      const keywordArray = Array.isArray(keywords) ? keywords : (keywords?.all || []);
+      const usedKeywords = new Set();
+
+      return projects.map((project) => {
+        const name = project.name || project.title || '';
+        const role = project.role || '';
+        const dates = project.startDate && project.endDate
+          ? `${project.startDate} – ${project.endDate}`
+          : (project.startDate || project.endDate || '');
+
+        let bullets = project.bullets || project.achievements || [];
+        if (typeof bullets === 'string') bullets = bullets.split('\n').filter(b => b.trim());
+
+        if (!bullets.length && project.description) {
+          bullets = [project.description];
+        }
+
+        const enhancedBullets = bullets.slice(0, 5).map((bullet, idx) => {
+          let text = (bullet || '').replace(/^\s*[-•]\s*/, '').trim();
+          if (!text) return '';
+
+          if (idx >= 2) {
+            if (!text.endsWith('.')) text += '.';
+            return text;
+          }
+
+          const bulletLower = text.toLowerCase();
+          const toInject = [];
+
+          for (let i = 0; i < keywordArray.length && toInject.length < 2; i++) {
+            const kw = keywordArray[i];
+            if (!kw) continue;
+            const kwLower = kw.toLowerCase();
+            if (!bulletLower.includes(kwLower) && !usedKeywords.has(kwLower)) {
+              toInject.push(kw);
+              usedKeywords.add(kwLower);
+            }
+          }
+
+          if (toInject.length > 0) {
+            const phrases = ['leveraging', 'utilising', 'through', 'with', 'via'];
+            const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+            if (text.endsWith('.')) {
+              text = text.slice(0, -1) + `, ${phrase} ${toInject.join(' and ')}.`;
+            } else {
+              text = `${text}, ${phrase} ${toInject.join(' and ')}.`;
+            }
+          } else {
+            if (!text.endsWith('.')) text += '.';
+          }
+
+          return text;
+        }).filter(Boolean);
+
+        return {
+          name,
+          role,
+          dates,
           bullets: enhancedBullets
         };
       });
@@ -357,6 +441,22 @@
           // Line 2: Title – YYYY – YYYY (use pre-formatted titleLine if available)
           sections.push(job.titleLine || job.title);
           job.bullets.forEach(bullet => {
+            sections.push(`• ${bullet}`);
+          });
+          sections.push('');
+        });
+      }
+
+      // Relevant Projects
+      if (resumeData.projects && resumeData.projects.length > 0) {
+        sections.push('RELEVANT PROJECTS');
+        resumeData.projects.forEach(project => {
+          // Line 1: Project name with role and dates
+          let headerLine = project.name;
+          if (project.role) headerLine += ` | ${project.role}`;
+          if (project.dates) headerLine += ` | ${project.dates}`;
+          sections.push(headerLine);
+          project.bullets.forEach(bullet => {
             sections.push(`• ${bullet}`);
           });
           sections.push('');
