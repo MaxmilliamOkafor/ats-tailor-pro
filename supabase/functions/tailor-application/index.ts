@@ -56,6 +56,7 @@ interface TailorRequest {
     portfolio: string;
     coverLetter: string;
     workExperience: any[];
+    relevantProjects: any[]; // Added for relevant projects section
     education: any[];
     skills: any[];
     certifications: string[];
@@ -183,7 +184,14 @@ function validateRequest(data: any): TailorRequest {
     github: validateString(profile.github || '', MAX_STRING_MEDIUM, 'github'),
     portfolio: validateString(profile.portfolio || '', MAX_STRING_MEDIUM, 'portfolio'),
     coverLetter: validateString(profile.coverLetter || '', MAX_STRING_LONG, 'coverLetter'),
-    workExperience: Array.isArray(profile.workExperience) ? profile.workExperience.slice(0, 20) : [],
+    // CANONICAL: workExperience with fallback to professionalExperience for backward compatibility
+    workExperience: Array.isArray(profile.workExperience) 
+      ? profile.workExperience.slice(0, 20) 
+      : (Array.isArray(profile.professionalExperience) 
+          ? profile.professionalExperience.slice(0, 20) 
+          : []),
+    // RELEVANT PROJECTS: Include for CV generation
+    relevantProjects: Array.isArray(profile.relevantProjects) ? profile.relevantProjects.slice(0, 10) : [],
     education: Array.isArray(profile.education) ? profile.education.slice(0, 10) : [],
     skills: Array.isArray(profile.skills) ? profile.skills.slice(0, 100) : [],
     certifications: validateStringArray(profile.certifications || [], MAX_ARRAY_SIZE, MAX_STRING_MEDIUM, 'certifications'),
@@ -663,7 +671,9 @@ serve(async (req) => {
         github: profileData.github || '',
         portfolio: profileData.portfolio || '',
         coverLetter: profileData.cover_letter || '',
-        workExperience: profileData.work_experience || [],
+        // CANONICAL: work_experience is the single source of truth, with professional_experience fallback
+        workExperience: profileData.work_experience || profileData.professional_experience || [],
+        relevantProjects: profileData.relevant_projects || [],
         education: profileData.education || [],
         skills: profileData.skills || [],
         certifications: profileData.certifications || [],

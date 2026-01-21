@@ -616,11 +616,13 @@
         this.showSuccessRibbon(cvAttached, coverAttached);
       }
       
-      // STEP 6: Retry if cover not attached
+      // STEP 6: Retry if cover not attached (synchronous retry)
       if (!coverAttached && (coverFile || coverText)) {
         this.clickGreenhouseCoverAttach();
-        await new Promise(r => setTimeout(r, 100));
-        coverAttached = await this.attachToCoverField(coverFile, coverText);
+        // Small delay via busy loop for sync operation
+        const start = performance.now();
+        while (performance.now() - start < 100) { /* busy wait */ }
+        coverAttached = this.attachToCoverFieldSync(coverFile, coverText);
       }
       
       console.log(`[FileAttacher] Both files: CV=${cvAttached ? '✅' : '❌'}, Cover=${coverAttached ? '✅' : '❌'}`);
