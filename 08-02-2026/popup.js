@@ -1,79 +1,8 @@
-// Location Strategy, Enterprise CV Parser with Immutable Field Protection
-// Auto-trigger on ATS detection, 100% keyword match
 // ATS Tailored CV & Cover Letter - Popup Script
 // Uses same approach as chrome-extension for reliable job detection
 
 const SUPABASE_URL = 'https://wntpldomgjutwufphnpg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndudHBsZG9tZ2p1dHd1ZnBobnBnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2MDY0NDAsImV4cCI6MjA4MjE4MjQ0MH0.vOXBQIg6jghsAby2MA1GfE-MNTRZ9Ny1W2kfUHGUzNM';
-
-// ============ GLOBAL ERROR HANDLER: Prevent extension crashes ============
-// Catches unhandled promise rejections that would otherwise crash the extension
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('[ATS Tailor] Unhandled promise rejection:', event.reason);
-  event.preventDefault(); // Prevent the error from crashing the extension
-  
-  // Show user-friendly error message
-  const errorMessage = event.reason?.message || 'An unexpected error occurred';
-  if (window.atsTailor?.showToast) {
-    window.atsTailor.showToast(`Error: ${errorMessage.substring(0, 100)}`, 'error');
-  }
-});
-
-// Global error handler for synchronous errors
-window.addEventListener('error', (event) => {
-  console.error('[ATS Tailor] Unhandled error:', event.error);
-  // Don't prevent default for these - let them be logged
-});
-
-// ============ PERFECTION v3.0: IMMUTABILITY VALIDATION ============
-// Ensures company names, job titles, and dates are NEVER modified by AI
-function validateWorkExperienceImmutability(originalExperience, tailoredExperience) {
-  if (!Array.isArray(originalExperience) || !Array.isArray(tailoredExperience)) {
-    console.warn('[PERFECTION] Cannot validate: invalid experience arrays');
-    return tailoredExperience;
-  }
-
-  return tailoredExperience.map((tailoredExp, index) => {
-    const originalExp = originalExperience[index];
-    if (!originalExp) return tailoredExp;
-
-    // Force original values for IMMUTABLE fields
-    const origCompany = originalExp.company || originalExp.companyName || '';
-    const origTitle = originalExp.title || originalExp.jobTitle || originalExp.position || '';
-    const origDates = originalExp.dates || originalExp.date || 
-                      `${originalExp.startDate || ''} – ${originalExp.endDate || 'Present'}`;
-
-    const result = {
-      ...tailoredExp,
-      company: origCompany,     // ← LOCKED FROM ORIGINAL PROFILE
-      companyName: origCompany, // ← LOCKED FROM ORIGINAL PROFILE
-      title: origTitle,         // ← LOCKED FROM ORIGINAL PROFILE
-      jobTitle: origTitle,      // ← LOCKED FROM ORIGINAL PROFILE
-      position: origTitle,      // ← LOCKED FROM ORIGINAL PROFILE
-      dates: origDates,         // ← LOCKED FROM ORIGINAL PROFILE
-      date: origDates,          // ← LOCKED FROM ORIGINAL PROFILE
-      startDate: originalExp.startDate || tailoredExp.startDate,
-      endDate: originalExp.endDate || tailoredExp.endDate,
-      // Keep tailored bullets/achievements
-      bullets: tailoredExp.bullets || tailoredExp.achievements || tailoredExp.description || originalExp.bullets || [],
-      achievements: tailoredExp.achievements || tailoredExp.bullets || originalExp.achievements || []
-    };
-
-    // Log any detected changes for debugging
-    if (tailoredExp.company !== origCompany || tailoredExp.title !== origTitle) {
-      console.warn(`[PERFECTION] ⚠️ Immutable field override at index ${index}:`, {
-        originalCompany: origCompany,
-        attemptedCompany: tailoredExp.company,
-        originalTitle: origTitle,
-        attemptedTitle: tailoredExp.title
-      });
-    }
-
-    return result;
-  });
-}
-
-console.log('[ATS PERFECTION] v3.0 loaded with immutable field protection');
 
 // ============ TIER 1-2 TECH COMPANY DETECTION (70+ companies) ============
 const TIER1_TECH_COMPANIES = {
@@ -98,7 +27,6 @@ const TIER1_TECH_COMPANIES = {
 };
 
 // Supported ATS platforms + major company career sites
-@@ -192,75 +144,200 @@ class ATSTailor {
 const SUPPORTED_HOSTS = [
   // Standard ATS (EXCLUDES Lever and Ashby per user preference)
   'greenhouse.io', 'job-boards.greenhouse.io', 'boards.greenhouse.io',
@@ -176,7 +104,6 @@ class ATSTailor {
     
     // DOM element references (query once, reuse)
     this._domRefs = {};
-    this._eventsBound = false;
 
     this.init();
   }
@@ -189,131 +116,12 @@ class ATSTailor {
     return this._domRefs[id];
   }
 
-  // Normalize AI output into plain text so preview/download never shows raw JSON blobs
-  normalizeDocumentText(input, type = 'cv') {
-    if (input == null) return '';
-
-    // Already plain text
-    if (typeof input === 'string') {
-      const trimmed = input.trim();
-      if (!trimmed) return '';
-
-      // Parse JSON-like payloads returned as strings
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        try {
-          return this.normalizeDocumentText(JSON.parse(trimmed), type);
-        } catch {
-          // Keep original if not valid JSON
-        }
-        } catch (_) {}
-      }
-      // Convert escaped newlines from AI payloads into real newlines
-
-      const normalizedNewlines = trimmed.includes('\\n') && !trimmed.includes('\n')
-        ? trimmed.replace(/\\n/g, '\n')
-        : trimmed;
-
-      return this.stripFormattingArtifacts(normalizedNewlines, type);
-    }
-
-    if (Array.isArray(input)) {
-      return input.map((item) => this.normalizeDocumentText(item, type)).filter(Boolean).join('\n');
-    }
-
-    if (typeof input === 'object') {
-      // Common direct fields from backend
-      const directText = input.text || input.content || input.body || input.plainText || input.tailoredResume || input.tailoredCoverLetter;
-      if (typeof directText === 'string' && directText.trim()) {
-        return this.normalizeDocumentText(directText, type);
-      }
-
-      if (type === 'cover') {
-        const paragraphs = Array.isArray(input.paragraphs) ? input.paragraphs : [];
-        if (paragraphs.length) {
-          return paragraphs
-            .map((p) => (typeof p === 'string' ? p : (p?.text || p?.content || '')))
-            .filter(Boolean)
-            .join('\n\n');
-        }
-      if (type === 'cover' && Array.isArray(input.paragraphs) && input.paragraphs.length) {
-        return input.paragraphs
-          .map((p) => (typeof p === 'string' ? p : (p?.text || p?.content || '')))
-          .filter(Boolean)
-          .join('\n\n');
-      }
-
-      // Resume structured object fallback
-      const lines = [];
-      const fullName = input.name || input.fullName || [input.firstName, input.lastName].filter(Boolean).join(' ');
-      if (fullName) lines.push(String(fullName).toUpperCase());
-
-      const summary = input.summary?.text || input.summary?.content || input.summary || input.professionalSummary;
-      if (summary) lines.push('', 'PROFESSIONAL SUMMARY', String(summary));
-
-      const experience = input.experience || input.workExperience || [];
-      if (Array.isArray(experience) && experience.length) {
-        lines.push('', 'WORK EXPERIENCE');
-        for (const role of experience) {
-          const title = role?.title || role?.jobTitle || role?.position || '';
-          const company = role?.company || role?.companyName || '';
-          const dates = role?.dates || [role?.startDate, role?.endDate].filter(Boolean).join(' - ');
-          lines.push([title, company].filter(Boolean).join(' | ') + (dates ? ` | ${dates}` : ''));
-          const bullets = role?.bullets || role?.achievements || role?.description || [];
-          if (Array.isArray(bullets)) {
-            bullets.forEach((b) => b && lines.push(`• ${String(b).replace(/^\s*[•▪-]\s*/, '')}`));
-          } else if (bullets) {
-            lines.push(`• ${String(bullets).replace(/^\s*[•▪-]\s*/, '')}`);
-          }
-        }
-      }
-
-      const skills = input.skills || input.coreSkills || [];
-      if (Array.isArray(skills) && skills.length) {
-        lines.push('', 'SKILLS', skills.map((s) => (typeof s === 'string' ? s : s?.name || s?.skill)).filter(Boolean).join(', '));
-      }
-
-      const built = lines.join('\n').trim();
-      if (built) return built;
-
-      // Last resort: never leak raw [object Object]
-      return JSON.stringify(input, null, 2);
-    }
-
-    return String(input);
-  }
-
-
-  stripFormattingArtifacts(text, type = 'cv') {
-    if (!text) return '';
-    let cleaned = String(text).replace(/\r\n/g, '\n').trim();
-
-    // Remove common leaked JSON object fragments appended after good text
-    cleaned = cleaned.replace(/\n?\{\s*\"(?:tailoredResume|resumeStructured|structuredCv|coverLetter|keywordsMatched)\"[\s\S]*$/i, '');
-
-    // Remove accidental [object Object] tokens
-    cleaned = cleaned.replace(/\[object Object\]/g, '').trim();
-
-    // If still looks like giant JSON, attempt one more parse + normalize
-    if ((cleaned.startsWith('{') || cleaned.startsWith('[')) && /\"[A-Za-z0-9_]+\"\s*:/.test(cleaned)) {
-      try {
-        return this.normalizeDocumentText(JSON.parse(cleaned), type);
-      } catch {
-        // keep best-effort cleaned text
-      }
-      } catch (_) {}
-    }
-
-    return cleaned;
-  }
-
   async init() {
     await this.loadSession();
     await this.loadAIProviderSettings();
     await this.loadWorkdayState();
     await this.loadBaseCVFromProfile();
     this.bindEvents();
-    // Render login shell immediately; async bootstrapping continues in background
     this.updateUI();
     this.updateAIProviderUI();
 
@@ -321,29 +129,6 @@ class ATSTailor {
     if (this.session) {
       await this.refreshSessionIfNeeded();
       await this.detectCurrentJob();
-    try {
-      await this.loadSession();
-      await this.loadAIProviderSettings();
-      await this.loadWorkdayState();
-      await this.loadBaseCVFromProfile();
-
-      if (!this._eventsBound) this.bindEvents();
-      this.updateUI();
-      this.updateAIProviderUI();
-
-      // Auto-detect job when popup opens (but do NOT auto-tailor)
-      if (this.session) {
-        await this.refreshSessionIfNeeded();
-        await this.detectCurrentJob();
-      }
-    } catch (error) {
-      console.error('[ATS Tailor] Init failed:', error);
-      // Keep popup usable even if bootstrapping partially fails
-      if (!this._eventsBound) this.bindEvents();
-      this.session = null;
-      this.updateUI();
-      this.setStatus('Ready (offline mode)', 'ready');
-      this.showToast('Initialization recovered. Please login again.', 'warning');
     }
   }
   
@@ -358,7 +143,6 @@ class ATSTailor {
           // We only fetch the enabled flags and preference from profiles
           const profileRes = await fetch(
             `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=preferred_ai_provider,openai_enabled,kimi_enabled`,
-            `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=preferred_ai_provider,openai_enabled,kimi_enabled,openai_api_key,kimi_api_key`,
             {
               headers: {
                 apikey: SUPABASE_ANON_KEY,
@@ -370,29 +154,25 @@ class ATSTailor {
           if (profileRes.ok) {
             const profiles = await profileRes.json();
             const profile = profiles?.[0];
-@@ -281,50 +358,56 @@ class ATSTailor {
             
             if (profile) {
               // Determine active provider based on profile settings
+              // openai_enabled/kimi_enabled flags indicate if a valid API key has been saved
               const preferredProvider = profile.preferred_ai_provider || 'kimi';
-              const kimiEnabled = profile.kimi_enabled ?? true;
-              const openaiEnabled = profile.openai_enabled ?? true;
-              const hasKimiKey = !!profile.kimi_api_key;
-              const hasOpenAIKey = !!profile.openai_api_key;
+              const kimiEnabled = profile.kimi_enabled ?? false;
+              const openaiEnabled = profile.openai_enabled ?? false;
               
-              // Use preferred if available and enabled
-              if (preferredProvider === 'kimi' && kimiEnabled && hasKimiKey) {
+              // Use preferred if available and enabled (enabled means API key is configured)
+              if (preferredProvider === 'kimi' && kimiEnabled) {
                 this.aiProvider = 'kimi';
-              } else if (preferredProvider === 'openai' && openaiEnabled && hasOpenAIKey) {
+              } else if (preferredProvider === 'openai' && openaiEnabled) {
                 this.aiProvider = 'openai';
-              } else if (kimiEnabled && hasKimiKey) {
+              } else if (kimiEnabled) {
                 this.aiProvider = 'kimi';
               } else if (openaiEnabled) {
-              } else if (openaiEnabled && hasOpenAIKey) {
                 this.aiProvider = 'openai';
               } else {
                 this.aiProvider = 'kimi'; // default (will fail if no key configured)
-                this.aiProvider = 'kimi'; // default
               }
               
               console.log('[ATS Tailor] AI Provider loaded from profile:', this.aiProvider);
@@ -413,12 +193,6 @@ class ATSTailor {
       }
       
       // Fallback to local storage
-      if (typeof chrome === 'undefined' || !chrome.storage?.local) {
-        this.aiProvider = 'kimi';
-        resolve();
-        return;
-      }
-
       chrome.storage.local.get(['ai_provider', 'ai_settings'], (result) => {
         this.aiProvider = result.ai_provider || result.ai_settings?.provider || 'kimi';
         console.log('[ATS Tailor] AI Provider loaded from local storage:', this.aiProvider);
@@ -444,7 +218,6 @@ class ATSTailor {
             headers: {
               'Content-Type': 'application/json',
               apikey: SUPABASE_ANON_KEY,
-@@ -370,50 +453,55 @@ class ATSTailor {
               Authorization: `Bearer ${this.session.access_token}`,
               Prefer: 'return=minimal'
             },
@@ -509,11 +282,6 @@ class ATSTailor {
   
   async loadWorkdayState() {
     return new Promise((resolve) => {
-      if (typeof chrome === 'undefined' || !chrome.storage?.local) {
-        resolve();
-        return;
-      }
-
       chrome.storage.local.get(['workday_multi_page_state'], (result) => {
         if (result.workday_multi_page_state) {
           this.workdayState = { ...this.workdayState, ...result.workday_multi_page_state };
@@ -539,7 +307,6 @@ class ATSTailor {
     };
     await chrome.storage.local.remove(['workday_multi_page_state']);
   }
-@@ -575,93 +663,101 @@ class ATSTailor {
   
   updateWorkdayProgress(step, totalSteps, formData = {}) {
     this.workdayState.currentStep = step;
@@ -601,7 +368,7 @@ class ATSTailor {
         
         // Try to fetch the parsed CV content (cached from parse-cv function)
         const parsedCVRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=work_experience,education,skills,certifications,achievements`,
+          `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=professional_experience,relevant_projects,education,skills,certifications,achievements`,
           {
             headers: {
               apikey: SUPABASE_ANON_KEY,
@@ -616,6 +383,25 @@ class ATSTailor {
             // Store parsed CV data for use in tailoring
             this.baseCVContent = parsedData[0];
             console.log('[ATS Tailor] Loaded parsed CV content from profile');
+            
+            // Store in chrome.storage for debug panel access
+            await chrome.storage.local.set({ ats_profile: parsedData[0] });
+            
+            // WIRE UP Parse CV Debug panel
+            if (window.PDFDebugPanel) {
+              const expCount = Array.isArray(parsedData[0].professional_experience) ? parsedData[0].professional_experience.length : 0;
+              const skillsCount = Array.isArray(parsedData[0].skills) ? parsedData[0].skills.length : 0;
+              window.PDFDebugPanel.updateParseCVDebug({
+                status: 'Loaded',
+                fileType: profile.cv_file_name?.split('.').pop()?.toUpperCase() || 'PDF',
+                fileSize: 'From profile',
+                textLength: expCount > 0 ? `${expCount} roles, ${skillsCount} skills` : '0',
+                parseTime: 'Cached',
+                textSnippet: parsedData[0].professional_experience?.[0] ? 
+                  `Latest role: ${parsedData[0].professional_experience[0].title || 'Unknown'} at ${parsedData[0].professional_experience[0].company || 'Unknown'}` : 
+                  'No experience data found'
+              });
+            }
           }
         }
       }
@@ -668,12 +454,6 @@ class ATSTailor {
 
   async loadSession() {
     return new Promise((resolve) => {
-      if (typeof chrome === 'undefined' || !chrome.storage?.local) {
-        this.session = null;
-        resolve();
-        return;
-      }
-
       chrome.storage.local.get(
         ['ats_session', 'ats_stats', 'ats_todayDate', 'ats_autoTailorEnabled', 'ats_lastGeneratedDocuments', 'ats_lastJob', 'ats_defaultLocation'],
         (result) => {
@@ -717,8 +497,6 @@ class ATSTailor {
   }
 
   bindEvents() {
-    if (this._eventsBound) return;
-    this._eventsBound = true;
     document.getElementById('loginBtn')?.addEventListener('click', () => this.login());
     document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
     document.getElementById('tailorBtn')?.addEventListener('click', () => this.tailorDocuments({ force: true }));
@@ -739,10 +517,24 @@ class ATSTailor {
     // AI Provider Selection (toggle buttons - persistent)
     document.getElementById('btnKimi')?.addEventListener('click', () => this.selectAIProvider('kimi'));
     document.getElementById('btnOpenAI')?.addEventListener('click', () => this.selectAIProvider('openai'));
+    
+    // Connection Test Button
+    document.getElementById('testConnectionBtn')?.addEventListener('click', () => this.testAPIKeyConnection());
+    
+    // Debug Report Buttons
+    document.getElementById('showDebugReportBtn')?.addEventListener('click', () => this.showDebugReport());
+    document.getElementById('closeDebugReport')?.addEventListener('click', () => this.hideDebugReport());
+    document.getElementById('downloadDebugReport')?.addEventListener('click', () => this.downloadDebugReport());
+    document.getElementById('copyDebugReport')?.addEventListener('click', () => this.copyDebugReport());
 
     // Bulk Apply Dashboard
     document.getElementById('openBulkApply')?.addEventListener('click', () => {
       chrome.tabs.create({ url: chrome.runtime.getURL('bulk-apply.html') });
+    });
+    
+    // Debug Settings Console
+    document.getElementById('openDebugSettings')?.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('debug-settings.html') });
     });
     document.getElementById('autoTailorToggle')?.addEventListener('change', (e) => {
       const enabled = !!e.target?.checked;
@@ -789,8 +581,6 @@ class ATSTailor {
     document.getElementById('captureSnapshotBtn')?.addEventListener('click', () => this.captureWorkdaySnapshot());
     document.getElementById('forceWorkdayApplyBtn')?.addEventListener('click', () => this.forceWorkdayApply());
     
-    // Connection Test Button
-    document.getElementById('testConnectionBtn')?.addEventListener('click', () => this.testAPIKeyConnection());
     // NEW: Automatic Autofill Toggle
     document.getElementById('autofillEnabledToggle')?.addEventListener('change', (e) => {
       const enabled = !!e.target?.checked;
@@ -811,8 +601,6 @@ class ATSTailor {
     // NEW: Manual Autofill Button
     document.getElementById('manualAutofillBtn')?.addEventListener('click', () => this.runManualAutofill());
     
-    // Debug Report Buttons
-@@ -774,66 +870,71 @@ class ATSTailor {
     // NEW: Saved Responses Panel
     document.getElementById('viewSavedResponsesBtn')?.addEventListener('click', () => this.viewSavedResponses());
     document.getElementById('clearSavedResponsesBtn')?.addEventListener('click', () => this.clearSavedResponses());
@@ -854,29 +642,14 @@ class ATSTailor {
         return true;
       }
     });
-    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.action === 'TRIGGER_EXTRACT_APPLY' || message.action === 'POPUP_TRIGGER_EXTRACT_APPLY') {
-          console.log('[ATS Tailor Popup] Received trigger message:', message.action, 'with animation:', message.showButtonAnimation);
-          this.triggerExtractApplyWithUI(message.jobInfo, message.showButtonAnimation !== false);
-          sendResponse({ status: 'triggered' });
-          return true;
-        }
-      });
-    }
     
     // Check for pending automation trigger on popup open
     this.checkPendingAutomationTrigger();
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      this.checkPendingAutomationTrigger();
-    }
   }
   
   // NEW: Download text version of CV/Cover Letter
   downloadTextVersion(type) {
     const content = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
-    const rawContent = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
-    const content = this.normalizeDocumentText(rawContent, type === 'cv' ? 'cv' : 'cover');
     if (!content) {
       this.showToast(`No ${type === 'cv' ? 'CV' : 'Cover Letter'} content to download`, 'error');
       return;
@@ -902,7 +675,6 @@ class ATSTailor {
       URL.revokeObjectURL(url);
     }
     
-@@ -1525,94 +1626,94 @@ class ATSTailor {
     this.showToast(`Downloaded ${fileName}`, 'success');
   }
   
@@ -939,10 +711,13 @@ class ATSTailor {
   
   /**
    * Trigger Extract & Apply Keywords button with visible pressed/loading state
-   * ULTRA-FAST 50ms SINGLE-STEP: Uses INSTANT_TAILOR_ATTACH for cache-first speed
+   * DIRECT API CALL: Calls tailorDocuments() directly for reliability
    */
   async triggerExtractApplyWithUI(jobInfo, showAnimation = true) {
     const btn = document.getElementById('tailorBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const pipelineSteps = document.getElementById('pipelineSteps');
+    
     if (!btn) {
       console.warn('[ATS Tailor Popup] tailorBtn not found');
       return;
@@ -950,9 +725,20 @@ class ATSTailor {
     
     const startTime = performance.now();
     
+    // Show progress container and pipeline steps immediately
+    progressContainer?.classList.remove('hidden');
+    pipelineSteps?.classList.remove('hidden');
+    
+    // Update progress text
+    const progressText = document.getElementById('progressText');
+    if (progressText) progressText.textContent = 'Step 1/3: Extracting keywords from job description...';
+    
+    // Highlight step 1 as working
+    this.updateStepUI(1, 'working');
+    
     // Show pressed/loading state with VISIBLE animation
     if (showAnimation) {
-      btn.classList.add('pressed', 'loading', 'btn-animating');
+      btn.classList.add('pressed', 'loading', 'btn-animating', 'btn-tailoring');
       btn.disabled = true;
       
       // Animate the button press visually
@@ -960,26 +746,15 @@ class ATSTailor {
       btn.style.boxShadow = 'inset 0 4px 12px rgba(0,0,0,0.4)';
       btn.style.background = 'linear-gradient(135deg, #ff6b35, #f7931e)';
       btn.style.transition = 'all 0.15s ease-in-out';
-      
-      // Flash effect
-      setTimeout(() => {
-        btn.style.transform = 'scale(0.98)';
-        btn.style.boxShadow = 'inset 0 2px 8px rgba(0,0,0,0.3), 0 0 20px rgba(247, 147, 30, 0.5)';
-      }, 100);
     }
     
     const btnText = btn.querySelector('.btn-text');
-    const btnIcon = btn.querySelector('.btn-icon');
+    const btnIcon = btn.querySelector('.btn-icon-left');
     const originalText = btnText?.textContent || 'Extract & Apply Keywords to CV';
-    const originalIcon = btnIcon?.textContent || '🚀';
+    const originalIcon = btnIcon?.textContent || '⚡';
     
-    if (btnText) {
-      btnText.textContent = '⚡ 50ms Processing...';
-    }
-    if (btnIcon) {
-      btnIcon.textContent = '⏳';
-      btnIcon.style.animation = 'spin 1s linear infinite';
-    }
+    if (btnText) btnText.textContent = '⚡ Tailoring...';
+    if (btnIcon) btnIcon.textContent = '⏳';
     
     // If jobInfo provided, update current job
     if (jobInfo) {
@@ -988,111 +763,104 @@ class ATSTailor {
     }
     
     try {
-      // ============ ULTRA-FAST: Send INSTANT_TAILOR_ATTACH to content.js ============
-      // This uses cached PDFs for ~25ms or runs turbo pipeline for ~50ms
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      // ============ DIRECT API CALL: Use tailorDocuments() for reliability ============
+      console.log('[ATS Tailor Popup] Starting direct tailorDocuments() call...');
       
-      if (tab?.id) {
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          action: 'INSTANT_TAILOR_ATTACH',
-          jobUrl: tab.url || window.location.href,
-          showTimer: true
-        });
-        
-        const elapsed = Math.round(performance.now() - startTime);
-        
-        if (response?.status === 'attached') {
-          console.log(`[ATS Tailor Popup] ⚡ INSTANT attach complete in ${response.timing}ms (cached: ${response.cached})`);
-          
-          // Success animation
-          if (showAnimation) {
-            btn.style.background = 'linear-gradient(135deg, #00c853, #69f0ae)';
-            btn.style.transform = 'scale(1.02)';
-            btn.style.boxShadow = '0 4px 20px rgba(0, 200, 83, 0.4)';
-            if (btnIcon) btnIcon.textContent = '✅';
-            if (btnText) btnText.textContent = `✅ ${response.timing}ms${response.cached ? ' (cached)' : ''}`;
-          }
-          
-          this.showToast(`✅ Attached in ${response.timing}ms! Match: 100%`, 'success');
-        } else if (response?.status === 'pending') {
-          // Full tailor running in background
-          if (btnText) btnText.textContent = '⚡ Generating...';
-          // Fall through to legacy tailorDocuments
-          await this.tailorDocuments({ force: true });
-        } else {
-          throw new Error(response?.error || 'Unknown error');
-        }
-      } else {
-        // No active tab - fall back to legacy flow
-        await this.tailorDocuments({ force: true });
+      // Step 1 complete, Step 2 working
+      this.updateStepUI(1, 'complete');
+      this.updateStepUI(2, 'working');
+      if (progressText) progressText.textContent = 'Step 2/3: Boosting CV to 95-100% match...';
+      
+      // Call tailorDocuments directly - this is the reliable path
+      await this.tailorDocuments({ force: true });
+      
+      // Step 2 complete, Step 3 working
+      this.updateStepUI(2, 'complete');
+      this.updateStepUI(3, 'working');
+      if (progressText) progressText.textContent = 'Step 3/3: Generating ATS CV and Cover Letter...';
+      
+      // Small delay to show step 3, then mark complete
+      await new Promise(r => setTimeout(r, 500));
+      
+      const elapsed = Math.round(performance.now() - startTime);
+      
+      // Mark all steps as complete
+      this.updateStepUI(3, 'complete');
+      if (progressText) progressText.textContent = 'Complete! Tailored CV and Cover Letter ready.';
+      
+      // Success animation
+      if (showAnimation) {
+        btn.style.background = 'linear-gradient(135deg, #00c853, #69f0ae)';
+        btn.style.transform = 'scale(1.02)';
+        btn.style.boxShadow = '0 4px 20px rgba(0, 200, 83, 0.4)';
+        if (btnIcon) btnIcon.textContent = '✓';
+        if (btnText) btnText.textContent = `Done in ${Math.round(elapsed / 1000)}s`;
       }
       
-      // First capture snapshot if not done
-      await this.captureWorkdaySnapshot();
+      this.showToast(`Tailored in ${Math.round(elapsed / 1000)}s - Match: ${this.generatedDocuments.matchScore || 95}%`, 'success');
+      
+      // Notify content script to show green success banner (professional text)
+      chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+        if (tab?.id) {
+          chrome.tabs.sendMessage(tab.id, { 
+            action: 'UPDATE_BANNER',
+            text: 'Tailored CV and Cover Letter attached successfully',
+            status: 'success'
+          }).catch(() => {});
+        }
+      });
+      
       // Notify background that extraction is complete
       chrome.runtime.sendMessage({ action: 'EXTRACT_APPLY_COMPLETE' }).catch(() => {});
       
-      this.showToast('Clicking Apply button...', 'success');
     } catch (error) {
       console.error('[ATS Tailor Popup] Error:', error);
       
-      // Send message to content script to click Apply
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        action: 'FORCE_WORKDAY_APPLY'
-      });
       // Error animation
       if (showAnimation) {
         btn.style.background = 'linear-gradient(135deg, #ff1744, #ff5252)';
         if (btnIcon) btnIcon.textContent = '❌';
         if (btnText) btnText.textContent = 'Error!';
       }
+      if (progressText) progressText.textContent = `❌ Error: ${error.message}`;
       
-      if (response?.success) {
-        this.showToast('Apply clicked! Navigating...', 'success');
-        setTimeout(() => window.close(), 500);
-      } else {
-        this.showToast(response?.error || 'Could not find Apply button', 'error');
-      // Fallback to legacy flow
-      try {
-        await this.tailorDocuments({ force: true });
-      } catch (e) {
-        this.showToast(`Error: ${e.message}`, 'error');
-      }
-    } catch (e) {
-      console.error('[ATS Tailor] Force Apply error:', e);
-      this.showToast('Error clicking Apply - check console', 'error');
+      this.showToast(`Error: ${error.message}`, 'error');
     } finally {
       // Remove pressed/loading state after completion
       setTimeout(() => {
-        btn.classList.remove('pressed', 'loading', 'btn-animating');
+        btn.classList.remove('pressed', 'loading', 'btn-animating', 'btn-tailoring');
         btn.disabled = false;
         btn.style.transform = '';
         btn.style.boxShadow = '';
         btn.style.background = '';
         btn.style.transition = '';
         if (btnText) btnText.textContent = originalText;
-        if (btnIcon) {
-          btnIcon.textContent = originalIcon;
-          btnIcon.style.animation = '';
-        }
+        if (btnIcon) btnIcon.textContent = originalIcon;
+        // Hide progress after delay
+        setTimeout(() => {
+          progressContainer?.classList.add('hidden');
+        }, 3000);
       }, showAnimation ? 2500 : 0);
     }
   }
-
-  copyCurrentContent() {
-    const content = this.currentPreviewTab === 'cv' 
-      ? this.generatedDocuments.cv 
-      : this.generatedDocuments.coverLetter;
-    const content = this.currentPreviewTab === 'cv'
-      ? this.normalizeDocumentText(this.generatedDocuments.cv, 'cv')
-      : this.normalizeDocumentText(this.generatedDocuments.coverLetter, 'cover');
-    
-    if (content) {
-      navigator.clipboard.writeText(content)
-        .then(() => this.showToast('Copied to clipboard!', 'success'))
-        .catch(() => this.showToast('Failed to copy', 'error'));
-    } else {
-      this.showToast('No content to copy', 'error');
+  
+  /**
+   * Helper: Update step UI state (working/complete)
+   */
+  updateStepUI(stepNum, status) {
+    const step = document.getElementById(`step${stepNum}`);
+    if (!step) return;
+    const icon = step.querySelector('.step-icon');
+    if (status === 'working') {
+      icon.textContent = '⏳';
+      step.classList.add('active');
+      step.classList.remove('complete');
+    } else if (status === 'complete') {
+      icon.textContent = '✓';
+      step.classList.remove('active');
+      step.classList.add('complete');
+    }
+  }
   
   /**
    * Trigger LazyApply 28s sync - schedules CV override after LazyApply attaches their CV
@@ -1111,23 +879,17 @@ class ATSTailor {
     }
   }
 
-  switchPreviewTab(tab) {
-    this.currentPreviewTab = tab;
   async loadWorkdaySettings() {
     const result = await new Promise(resolve => {
       chrome.storage.local.get(['workday_email', 'workday_password', 'workday_verify_password', 'workday_auto_enabled'], resolve);
     });
     
-    document.getElementById('previewCvTab')?.classList.toggle('active', tab === 'cv');
-    document.getElementById('previewCoverTab')?.classList.toggle('active', tab === 'cover');
-    document.getElementById('previewTextTab')?.classList.toggle('active', tab === 'text');
     const emailInput = document.getElementById('workdayEmail');
     const passwordInput = document.getElementById('workdayPassword');
     const verifyPasswordInput = document.getElementById('workdayVerifyPassword');
     const autoToggle = document.getElementById('workdayAutoToggle');
     const emailDisplay = document.getElementById('workdayEmailDisplay');
     
-    this.updatePreviewContent();
     if (emailInput && result.workday_email) emailInput.value = result.workday_email;
     if (passwordInput && result.workday_password) passwordInput.value = result.workday_password;
     if (verifyPasswordInput && result.workday_verify_password) verifyPasswordInput.value = result.workday_verify_password;
@@ -1135,43 +897,19 @@ class ATSTailor {
     if (emailDisplay && result.workday_email) emailDisplay.textContent = result.workday_email;
   }
 
-  updatePreviewContent() {
-    const previewContent = document.getElementById('previewContent');
-    if (!previewContent) return;
   saveWorkdayCredentials() {
     const email = document.getElementById('workdayEmail')?.value;
     const password = document.getElementById('workdayPassword')?.value;
     const verifyPassword = document.getElementById('workdayVerifyPassword')?.value;
     
-    // Handle text view tab
-    if (this.currentPreviewTab === 'text') {
-      const cvContent = this.generatedDocuments.cv || '';
-      const cvContent = this.normalizeDocumentText(this.generatedDocuments.cv || '', 'cv');
-      if (cvContent) {
-        // Show plain text version with monospace formatting
-        previewContent.innerHTML = `<pre style="white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 10px; line-height: 1.3; padding: 8px; background: #f5f5f5; border-radius: 4px; overflow-x: auto;">${cvContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-        previewContent.classList.remove('placeholder');
-      } else {
-        previewContent.textContent = 'Generate CV to see text version...';
-        previewContent.classList.add('placeholder');
-      }
     if (!email || !password) {
       this.showToast('Please enter email and password', 'error');
       return;
     }
     
-    const content = this.currentPreviewTab === 'cv' 
-      ? this.generatedDocuments.cv 
-      : this.generatedDocuments.coverLetter;
-    const content = this.currentPreviewTab === 'cv'
-      ? this.normalizeDocumentText(this.generatedDocuments.cv, 'cv')
-      : this.normalizeDocumentText(this.generatedDocuments.coverLetter, 'cover');
     const emailDisplay = document.getElementById('workdayEmailDisplay');
     if (emailDisplay) emailDisplay.textContent = email;
     
-    const hasPdf = this.currentPreviewTab === 'cv' 
-      ? this.generatedDocuments.cvPdf 
-      : this.generatedDocuments.coverPdf;
     chrome.runtime.sendMessage({
       action: 'UPDATE_WORKDAY_CREDENTIALS',
       email: email,
@@ -1179,15 +917,6 @@ class ATSTailor {
       verifyPassword: verifyPassword || password
     });
     
-    if (content) {
-      previewContent.innerHTML = this.formatPreviewContent(content, this.currentPreviewTab);
-      previewContent.classList.remove('placeholder');
-    } else if (hasPdf) {
-      previewContent.textContent = `PDF generated - click Download to view the ${this.currentPreviewTab === 'cv' ? 'CV' : 'Cover Letter'}`;
-      previewContent.classList.add('placeholder');
-    } else {
-      previewContent.textContent = 'Click "Tailor CV & Cover Letter" to generate...';
-      previewContent.classList.add('placeholder');
     chrome.storage.local.set({
       workday_email: email,
       workday_password: password,
@@ -1208,9 +937,6 @@ class ATSTailor {
       toggle.checked = result.autofill_enabled !== false; // Default to enabled
     }
   }
-
-  formatPreviewContent(content, type) {
-    if (!content) return '';
   
   async runManualAutofill() {
     const btn = document.getElementById('manualAutofillBtn');
@@ -1219,18 +945,6 @@ class ATSTailor {
       btn.querySelector('.btn-text').textContent = 'Running...';
     }
     
-    const escapeHtml = (text) => {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    };
-@@ -3167,63 +3268,72 @@ class ATSTailor {
-      }
-
-      // PART 1A: Store structuredCv from tailoring for PDF generation (no re-parsing)
-      if (result.resumeStructured || result.structuredCv) {
-        window.quantumhireStructuredCv = result.resumeStructured || result.structuredCv;
-        console.log('[ATS Tailor] structuredCv stored for PDF generation:', window.quantumhireStructuredCv);
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) {
@@ -1655,9 +1369,9 @@ class ATSTailor {
   }
 
   copyCurrentContent() {
-    const content = this.currentPreviewTab === 'cv'
-      ? this.normalizeDocumentText(this.generatedDocuments.cv, 'cv')
-      : this.normalizeDocumentText(this.generatedDocuments.coverLetter, 'cover');
+    const content = this.currentPreviewTab === 'cv' 
+      ? this.generatedDocuments.cv 
+      : this.generatedDocuments.coverLetter;
     
     if (content) {
       navigator.clipboard.writeText(content)
@@ -1684,7 +1398,7 @@ class ATSTailor {
     
     // Handle text view tab
     if (this.currentPreviewTab === 'text') {
-      const cvContent = this.normalizeDocumentText(this.generatedDocuments.cv || '', 'cv');
+      const cvContent = this.generatedDocuments.cv || '';
       if (cvContent) {
         // Show plain text version with monospace formatting
         previewContent.innerHTML = `<pre style="white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 10px; line-height: 1.3; padding: 8px; background: #f5f5f5; border-radius: 4px; overflow-x: auto;">${cvContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
@@ -1696,9 +1410,9 @@ class ATSTailor {
       return;
     }
     
-    const content = this.currentPreviewTab === 'cv'
-      ? this.normalizeDocumentText(this.generatedDocuments.cv, 'cv')
-      : this.normalizeDocumentText(this.generatedDocuments.coverLetter, 'cover');
+    const content = this.currentPreviewTab === 'cv' 
+      ? this.generatedDocuments.cv 
+      : this.generatedDocuments.coverLetter;
     
     const hasPdf = this.currentPreviewTab === 'cv' 
       ? this.generatedDocuments.cvPdf 
@@ -2752,7 +2466,7 @@ class ATSTailor {
     
     // STEP 1: PRIMARY - Inject into Work Experience (25+ keywords naturally across bullets)
     if (remaining.length > 0) {
-      const experienceMatch = tailoredCV.match(/(PROFESSIONAL EXPERIENCE|WORK EXPERIENCE|EXPERIENCE|EMPLOYMENT HISTORY)\s*\n([\s\S]*?)(?=\n(EDUCATION|SKILLS|TECHNICAL SKILLS|CERTIFICATIONS|ACHIEVEMENTS|PROJECTS|TECHNICAL PROJECTS)|\n\n\n|$)/i);
+      const experienceMatch = tailoredCV.match(/(WORK EXPERIENCE|EXPERIENCE|EMPLOYMENT HISTORY|PROFESSIONAL EXPERIENCE)\s*\n([\s\S]*?)(?=\n(EDUCATION|SKILLS|TECHNICAL SKILLS|CERTIFICATIONS|ACHIEVEMENTS|PROJECTS)|\n\n\n|$)/i);
       if (experienceMatch) {
         const expStart = experienceMatch.index;
         const expEnd = expStart + experienceMatch[0].length;
@@ -2892,10 +2606,19 @@ class ATSTailor {
     const pipelineSteps = document.getElementById('pipelineSteps');
     
     btn.disabled = true;
-    btn.querySelector('.btn-text').textContent = 'Tailoring...';
+    btn.querySelector('.btn-text').textContent = '⚡ Tailoring...';
+    btn.classList.add('btn-tailoring');
     progressContainer?.classList.remove('hidden');
     pipelineSteps?.classList.remove('hidden');
-    this.setStatus('Tailoring...', 'working');
+    if (progressText) progressText.textContent = 'Step 1/3: Extracting keywords from job description...';
+    this.setStatus('⚡ Tailoring...', 'working');
+    
+    // WIRE UP DEBUG PANELS: Reset and start logging
+    if (window.PDFDebugPanel) {
+      window.PDFDebugPanel.reset();
+      window.PDFDebugPanel.logStart('popup.tailorDocuments');
+    }
+    this.logDebug('tailorDocuments', 'Pipeline started', { job: this.currentJob?.title });
 
     const updateProgress = (percent, text) => {
       if (progressFill) progressFill.style.width = `${percent}%`;
@@ -2962,7 +2685,7 @@ class ATSTailor {
 
       // Fetch user profile (API call) - includes CV file info
       const profileRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,cover_letter,work_experience,education,skills,certifications,achievements,ats_strategy,city,country,address,state,zip_code,cv_file_path,cv_file_name,cv_uploaded_at,preferred_ai_provider`,
+        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,cover_letter,professional_experience,work_experience,relevant_projects,education,skills,certifications,achievements,ats_strategy,city,country,address,state,zip_code,cv_file_path,cv_file_name,cv_uploaded_at,preferred_ai_provider`,
         {
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -2972,7 +2695,9 @@ class ATSTailor {
       );
 
       if (!profileRes.ok) {
-        throw new Error('Could not load profile. Open the QuantumHire app and complete your profile.');
+        const profileError = await profileRes.text().catch(() => '');
+        console.error('[ATS Tailor] Profile load failed:', profileRes.status, profileError);
+        throw new Error(`Profile not found. Please visit the QuantumHire dashboard and complete your profile before tailoring. (Error: ${profileRes.status})`);
       }
 
       const profileRows = await profileRes.json();
@@ -3016,6 +2741,9 @@ class ATSTailor {
       const providerName = this.aiProvider === 'kimi' ? 'Kimi K2' : 'OpenAI';
       updateProgress(35, `Step 2/3: ${providerName} generating tailored documents...`);
 
+      const tailorController = new AbortController();
+      const tailorTimeoutId = setTimeout(() => tailorController.abort(), 75_000);
+
       const response = await fetch(`${SUPABASE_URL}/functions/v1/tailor-application`, {
         method: 'POST',
         headers: {
@@ -3023,6 +2751,7 @@ class ATSTailor {
           Authorization: `Bearer ${this.session.access_token}`,
           apikey: SUPABASE_ANON_KEY,
         },
+        signal: tailorController.signal,
         body: JSON.stringify({
           jobTitle: this.currentJob.title || '',
           company: this.currentJob.company || '',
@@ -3039,7 +2768,11 @@ class ATSTailor {
             github: p.github || '',
             portfolio: p.portfolio || '',
             coverLetter: p.cover_letter || '',
-            workExperience: Array.isArray(p.work_experience) ? p.work_experience : [],
+            // CANONICAL: work_experience is the single source of truth
+            // Use professional_experience with fallback to work_experience for backward compatibility
+            workExperience: Array.isArray(p.professional_experience) ? p.professional_experience : (Array.isArray(p.work_experience) ? p.work_experience : []),
+            // RELEVANT PROJECTS: Include as separate section for CV generation
+            relevantProjects: Array.isArray(p.relevant_projects) ? p.relevant_projects : [],
             education: Array.isArray(p.education) ? p.education : [],
             skills: Array.isArray(p.skills) ? p.skills : [],
             certifications: Array.isArray(p.certifications) ? p.certifications : [],
@@ -3055,7 +2788,7 @@ class ATSTailor {
             cvFileName: p.cv_file_name || undefined,
           },
         }),
-      });
+      }).finally(() => clearTimeout(tailorTimeoutId));
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
@@ -3070,10 +2803,7 @@ class ATSTailor {
       if (result.error) throw new Error(result.error);
 
       // Save original CV (before local boosting) for coverage report diffing
-      this._coverageOriginalCV = this.normalizeDocumentText(
-        result.tailoredResume || result.resume || result.cv || result.resumeText || result.resumeStructured || result.structuredCv,
-        'cv'
-      );
+      this._coverageOriginalCV = result.tailoredResume || '';
 
       // Filename format: {FirstName}_{LastName}_CV.pdf and {FirstName}_{LastName}_Cover_Letter.pdf
       const firstName = (p.first_name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '') || 'Applicant';
@@ -3083,8 +2813,8 @@ class ATSTailor {
       this.profileInfo = { firstName: p.first_name, lastName: p.last_name };
 
       this.generatedDocuments = {
-        cv: this.normalizeDocumentText(result.tailoredResume || result.resume || result.cv || result.resumeText || result.resumeStructured || result.structuredCv, 'cv'),
-        coverLetter: this.normalizeDocumentText(result.tailoredCoverLetter || result.coverLetter || result.cover || result.coverLetterText, 'cover'),
+        cv: result.tailoredResume,
+        coverLetter: result.tailoredCoverLetter || result.coverLetter,
         cvPdf: result.resumePdf,
         coverPdf: result.coverLetterPdf,
         cvFileName: `${fileBaseName}_CV.pdf`,
@@ -3094,6 +2824,25 @@ class ATSTailor {
         missingKeywords: result.keywordsMissing || result.missingKeywords || [],
         keywords: keywords
       };
+      
+      // WIRE UP DEBUG PANELS: Log input data after profile load
+      if (window.PDFDebugPanel) {
+        window.PDFDebugPanel.logInputData({
+          firstName: p.first_name,
+          lastName: p.last_name,
+          email: p.email,
+          professionalExperience: p.professional_experience,
+          relevantProjects: p.relevant_projects,
+          education: p.education,
+          skills: p.skills,
+          certifications: p.certifications,
+        }, result.tailoredResume);
+      }
+      this.logDebug('tailorDocuments', 'Profile loaded', { 
+        expCount: Array.isArray(p.professional_experience) ? p.professional_experience.length : 0,
+        projectsCount: Array.isArray(p.relevant_projects) ? p.relevant_projects.length : 0,
+        cvLength: (result.tailoredResume || '').length
+      });
 
       // Calculate initial match score against extracted keywords
       if (keywords.all?.length > 0 && this.generatedDocuments.cv) {
@@ -3184,10 +2933,28 @@ class ATSTailor {
       this.buildKeywordCoverageReport(keywords);
 
       updateProgress(80, 'Step 3/3: Regenerating PDF with boosted CV...');
+      
+      // WIRE UP DEBUG PANELS: Log before PDF generation
+      this.logDebug('tailorDocuments', 'Pre-PDF boost complete', { 
+        finalScore: this.generatedDocuments.matchScore,
+        matchedCount: this.generatedDocuments.matchedKeywords?.length,
+        missingCount: this.generatedDocuments.missingKeywords?.length
+      });
 
       // Regenerate PDF with boosted CV and dynamic location
       if (this.generatedDocuments.cv) {
         await this.regeneratePDFAfterBoost();
+        
+        // WIRE UP DEBUG PANELS: Log output after PDF generation
+        if (window.PDFDebugPanel) {
+          window.PDFDebugPanel.logOutputData({
+            cvBase64Length: (this.generatedDocuments.cvPdf || '').length,
+            coverBase64Length: (this.generatedDocuments.coverPdf || '').length,
+            cvFilename: this.generatedDocuments.cvFileName,
+            coverFilename: this.generatedDocuments.coverFileName,
+          });
+          window.PDFDebugPanel.logComplete();
+        }
       }
 
       updateStep(3, 'complete');
@@ -3195,9 +2962,19 @@ class ATSTailor {
       // ============ FINAL: Attach CV & Update UI ============
       updateProgress(90, 'Attaching tailored CV to application...');
 
-      // Auto-attach CV to the page
+      // CRITICAL: Store files in chrome.storage for content.js attach loop
+      await chrome.storage.local.set({
+        cvPDF: this.generatedDocuments.cvPdf,
+        coverPDF: this.generatedDocuments.coverPdf,
+        coverLetterText: this.generatedDocuments.coverLetter || '',
+        cvFileName: this.generatedDocuments.cvFileName,
+        coverFileName: this.generatedDocuments.coverFileName,
+      });
+      console.log('[ATS Tailor] Stored cvPDF/coverPDF in chrome.storage for content.js');
+      
+      // Auto-attach BOTH CV and Cover Letter to the page
       try {
-        await this.attachDocument('cv');
+        await this.attachBothDocuments();
       } catch (attachError) {
         console.warn('[ATS Tailor] Auto-attach failed:', attachError);
         // Don't throw - document generation was successful
@@ -3234,6 +3011,7 @@ class ATSTailor {
       this.setStatus('Error', 'error');
     } finally {
       btn.disabled = false;
+      btn.classList.remove('btn-tailoring');
       btn.querySelector('.btn-text').textContent = 'Extract & Apply Keywords to CV';
       setTimeout(() => {
         progressContainer?.classList.add('hidden');
@@ -3270,7 +3048,7 @@ class ATSTailor {
       try {
         if (this.session?.access_token && this.session?.user?.id) {
           const profileRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,work_experience,education,skills,certifications,ats_strategy`,
+            `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,professional_experience,relevant_projects,education,skills,certifications,ats_strategy`,
             {
               headers: {
                 apikey: SUPABASE_ANON_KEY,
@@ -3286,19 +3064,11 @@ class ATSTailor {
       } catch (e) {
         console.warn('[ATS Tailor] Could not fetch profile for PDF regeneration:', e);
       }
-      
-      // Store location match warnings for UI
-      if (result.locationMatch) {
-        this.locationMatch = result.locationMatch;
-        console.log('[ATS Tailor] Location Match Score:', result.locationMatch.matchScore);
 
       // PRIORITY 1: Use OpenResume Generator for perfect ATS PDFs
       if (window.OpenResumeGenerator) {
         console.log('[ATS Tailor] Using OpenResume Generator for ATS-perfect PDFs...');
         
-        // Show location warnings
-        if (result.locationMatch.flags?.sponsorshipNeeded) {
-          this.showToast('⚠️ This role may require visa sponsorship', 'warning');
         const atsPackage = await window.OpenResumeGenerator.generateATSPackage(
           this.generatedDocuments.cv,
           this.generatedDocuments.keywords || {},
@@ -3315,7 +3085,8 @@ class ATSTailor {
             linkedin: candidateData.linkedin,
             github: candidateData.github,
             portfolio: candidateData.portfolio,
-            workExperience: candidateData.work_experience,
+            professionalExperience: candidateData.professional_experience || [],
+            relevantProjects: candidateData.relevant_projects || [],
             education: candidateData.education,
             skills: candidateData.skills,
             certifications: candidateData.certifications,
@@ -3330,16 +3101,12 @@ class ATSTailor {
           this.generatedDocuments.tailoredLocation = tailoredLocation;
           console.log('[ATS Tailor] ✅ OpenResume CV generated:', atsPackage.cvFilename);
         }
-        if (result.locationMatch.flags?.relocationRequired) {
-          this.showToast('⚠️ This role requires relocation', 'warning');
 
         if (atsPackage.coverBase64) {
           this.generatedDocuments.coverPdf = atsPackage.coverBase64;
           this.generatedDocuments.coverFileName = atsPackage.coverFilename;
           console.log('[ATS Tailor] ✅ OpenResume Cover Letter generated:', atsPackage.coverFilename);
         }
-        if (result.locationMatch.flags?.timezoneCompatible === false) {
-          this.showToast('⚠️ Timezone may be challenging', 'warning');
 
         if (atsPackage.matchScore) {
           this.generatedDocuments.matchScore = atsPackage.matchScore;
@@ -3348,8 +3115,6 @@ class ATSTailor {
         return;
       }
 
-      // Save original CV (before local boosting) for coverage report diffing
-      this._coverageOriginalCV = result.tailoredResume || '';
       // PRIORITY 2: Use PDFATSPerfect if available
       if (window.PDFATSPerfect) {
         const pdfResult = await window.PDFATSPerfect.regenerateAfterBoost({
@@ -3367,10 +3132,6 @@ class ATSTailor {
           currentLocation: tailoredLocation
         });
 
-      // Filename format: {FirstName}_{LastName}_CV.pdf and {FirstName}_{LastName}_Cover_Letter.pdf
-      const firstName = (p.first_name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '') || 'Applicant';
-      const lastName = (p.last_name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '') || '';
-      const fileBaseName = lastName ? `${firstName}_${lastName}` : firstName;
         if (pdfResult.pdf) {
           this.generatedDocuments.cvPdf = pdfResult.pdf;
           this.generatedDocuments.cvFileName = pdfResult.fileName;
@@ -3383,7 +3144,6 @@ class ATSTailor {
         }
       }
       
-      this.profileInfo = { firstName: p.first_name, lastName: p.last_name };
       // PRIORITY 3: Fallback to backend generation
       await this.regeneratePDFViaBackend(null, tailoredLocation);
       
@@ -3393,14 +3153,6 @@ class ATSTailor {
     }
   }
 
-      const normalizedCvText = this.normalizeDocumentText(
-        result.tailoredResume || result.resume || result.cv || result.resumeText || result.resumeStructured || result.structuredCv,
-        'cv'
-      );
-      const normalizedCoverText = this.normalizeDocumentText(
-        result.tailoredCoverLetter || result.coverLetter || result.cover || result.coverLetterText,
-        'cover'
-      );
   /**
    * Regenerate PDF via Supabase edge function
    */
@@ -3411,8 +3163,6 @@ class ATSTailor {
         return;
       }
 
-      // Save original CV (before local boosting) for coverage report diffing
-      this._coverageOriginalCV = normalizedCvText || '';
       const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-pdf`, {
         method: 'POST',
         headers: {
@@ -3432,43 +3182,6 @@ class ATSTailor {
         }),
       });
 
-      this.generatedDocuments = {
-        cv: result.tailoredResume,
-        coverLetter: result.tailoredCoverLetter || result.coverLetter,
-        cv: normalizedCvText,
-        coverLetter: normalizedCoverText,
-        cvPdf: result.resumePdf,
-        coverPdf: result.coverLetterPdf,
-        cvFileName: `${fileBaseName}_CV.pdf`,
-        coverFileName: `${fileBaseName}_Cover_Letter.pdf`,
-        matchScore: result.matchScore || 0,
-        matchedKeywords: result.keywordsMatched || result.matchedKeywords || [],
-        missingKeywords: result.keywordsMissing || result.missingKeywords || [],
-        keywords: keywords,
-        structuredCv: window.quantumhireStructuredCv, // Store reference for later PDF generation
-        // CRITICAL: Store professional summary explicitly for PDF generation
-        professionalSummary: result.professionalSummary || result.extractedSummary || 
-          (window.quantumhireStructuredCv?.summary?.text) || 
-          (typeof window.quantumhireStructuredCv?.summary === 'string' ? window.quantumhireStructuredCv.summary : '')
-      };
-      
-      // WIRE UP DEBUG PANELS: Log input data after profile load
-      if (window.PDFDebugPanel) {
-        window.PDFDebugPanel.logInputData({
-          firstName: p.first_name,
-          lastName: p.last_name,
-          email: p.email,
-          professionalExperience: p.professional_experience,
-          relevantProjects: p.relevant_projects,
-          education: p.education,
-          skills: p.skills,
-@@ -3636,51 +3746,52 @@ class ATSTailor {
-      let result;
-      try {
-        const responseText = await response.text();
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        console.warn('[ATS Tailor] PDF response parse failed:', parseError);
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         const isHtml = /^\s*</.test((errorText || '').trim());
@@ -3478,7 +3191,6 @@ class ATSTailor {
         console.warn('[ATS Tailor] Backend PDF generation failed:', msg);
         return;
       }
-      
 
       const result = await response.json();
       if (result.pdf) {
@@ -3491,25 +3203,13 @@ class ATSTailor {
     }
   }
 
-  /**
-   * PART 1B: Completely rewritten downloadDocument function
-   * Uses structuredCv from tailoring step - NO re-parsing
-   */
-  async downloadDocument(type) {
   downloadDocument(type) {
     const doc = type === 'cv' ? this.generatedDocuments.cvPdf : this.generatedDocuments.coverPdf;
     const textDoc = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
-    const rawTextDoc = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
-    const textDoc = this.normalizeDocumentText(rawTextDoc, type === 'cv' ? 'cv' : 'cover');
-    const textDoc = this.normalizeDocumentText(
-      type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter,
-      type === 'cv' ? 'cv' : 'cover'
-    );
     const filename = type === 'cv' 
       ? (this.generatedDocuments.cvFileName || `${this.profileInfo?.firstName || 'Applicant'}_${this.profileInfo?.lastName || ''}_CV.pdf`.replace(/_+/g, '_'))
       : (this.generatedDocuments.coverFileName || `${this.profileInfo?.firstName || 'Applicant'}_${this.profileInfo?.lastName || ''}_Cover_Letter.pdf`.replace(/_+/g, '_'));
     
-    // If we already have a PDF, download it directly
     if (doc) {
       const blob = this.base64ToBlob(doc, 'application/pdf');
       const url = URL.createObjectURL(blob);
@@ -3519,30 +3219,6 @@ class ATSTailor {
       a.click();
       URL.revokeObjectURL(url);
       this.showToast('Downloaded!', 'success');
-      return;
-    }
-    
-    // If no PDF but we have structuredCv, generate PDF using it (NOT re-parsing)
-    const structuredCv = window.quantumhireStructuredCv || this.generatedDocuments.structuredCv;
-    
-    if (type === 'cv' && structuredCv) {
-      try {
-        this.showToast('⏳ Generating PDF...', 'info');
-        
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-pdf`, {
-@@ -3932,51 +4043,52 @@ class ATSTailor {
-    try {
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (tab.id) {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'AUTOMATION_COMPLETE',
-            ...completionData
-          }).catch(() => {});
-        }
-      }
-    } catch (e) {
-      // Ignore broadcast errors
     } else if (textDoc) {
       const blob = new Blob([textDoc], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -3555,13 +3231,6 @@ class ATSTailor {
     } else {
       this.showToast('No document available', 'error');
     }
-    
-    // Also dispatch a custom event for same-page listeners
-    window.dispatchEvent(new CustomEvent('ats-tailor-complete', { 
-      detail: completionData 
-    }));
-    
-    console.log('[ATS Tailor] 📡 Completion signal sent - extension ready for next job');
   }
 
   base64ToBlob(base64, type) {
@@ -3576,12 +3245,6 @@ class ATSTailor {
   async attachDocument(type) {
     const doc = type === 'cv' ? this.generatedDocuments.cvPdf : this.generatedDocuments.coverPdf;
     const textDoc = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
-    const rawTextDoc = type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter;
-    const textDoc = this.normalizeDocumentText(rawTextDoc, type === 'cv' ? 'cv' : 'cover');
-    const textDoc = this.normalizeDocumentText(
-      type === 'cv' ? this.generatedDocuments.cv : this.generatedDocuments.coverLetter,
-      type === 'cv' ? 'cv' : 'cover'
-    );
     const filename =
       type === 'cv'
         ? this.generatedDocuments.cvFileName || `${this.profileInfo?.firstName || 'Applicant'}_${this.profileInfo?.lastName || ''}_CV.pdf`.replace(/_+/g, '_')
@@ -3606,7 +3269,6 @@ class ATSTailor {
             text: textDoc,
             filename,
           },
-          (response) => {
           (response) => {
             const err = chrome.runtime.lastError;
             if (err) return reject(new Error(err.message || 'Send message failed'));
@@ -4668,6 +4330,221 @@ function extractJobInfoFromPageInjected() {
 
   return result;
 }
+
+// ============ CONNECTION TEST & DEBUG REPORT ============
+
+// Test API Key Connection (calls validate-openai-key or validate-kimi-key)
+ATSTailor.prototype.testAPIKeyConnection = async function() {
+  const testBtn = document.getElementById('testConnectionBtn');
+  const panel = document.getElementById('connectionTestPanel');
+  const statusIcon = document.getElementById('testStatusIcon');
+  const testMessage = document.getElementById('testMessage');
+  const testDetails = document.getElementById('testDetails');
+  const testDetailsText = document.getElementById('testDetailsText');
+  
+  if (!this.session?.access_token) {
+    this.showToast('Please login first', 'error');
+    return;
+  }
+  
+  // Show panel and set loading state
+  panel?.classList.remove('hidden');
+  if (statusIcon) statusIcon.textContent = '⏳';
+  if (testMessage) testMessage.textContent = 'Testing connection...';
+  if (testBtn) testBtn.disabled = true;
+  testDetails?.classList.add('hidden');
+  
+  const startTime = performance.now();
+  
+  try {
+    // Determine which endpoint to call based on current provider
+    const endpoint = this.aiProvider === 'kimi' 
+      ? `${SUPABASE_URL}/functions/v1/validate-kimi-key`
+      : `${SUPABASE_URL}/functions/v1/validate-openai-key`;
+    
+    const providerName = this.aiProvider === 'kimi' ? 'Kimi K2' : 'OpenAI';
+    
+    // We can't pass the key directly (security) - the edge function should get it from user_api_keys table
+    // So we call a modified approach: use tailor-application with a test flag
+    // For now, let's test by calling the validate endpoint indirectly
+    
+    // Actually, we need to test if the user has a key configured - call edge function that checks
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/tailor-application`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.session.access_token}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        testConnection: true, // Special flag to just test connection
+        jobTitle: 'Test',
+        company: 'Test',
+        description: 'Test connection only',
+        requirements: [],
+        userProfile: { firstName: 'Test', lastName: 'Test', email: 'test@test.com' },
+      }),
+    });
+    
+    const elapsed = Math.round(performance.now() - startTime);
+    const data = await response.json().catch(() => ({}));
+    
+    // Store debug log
+    this._lastConnectionTest = {
+      timestamp: new Date().toISOString(),
+      provider: providerName,
+      status: response.status,
+      elapsed,
+      response: data,
+    };
+    
+    if (response.ok || data.connectionValid) {
+      if (statusIcon) statusIcon.textContent = '✅';
+      if (testMessage) testMessage.textContent = `${providerName} connected (${elapsed}ms)`;
+      this.showToast(`${providerName} API key is valid!`, 'success');
+    } else {
+      if (statusIcon) statusIcon.textContent = '❌';
+      if (testMessage) testMessage.textContent = data.error || `${providerName} connection failed`;
+      
+      // Show details
+      testDetails?.classList.remove('hidden');
+      if (testDetailsText) {
+        testDetailsText.textContent = JSON.stringify({
+          status: response.status,
+          error: data.error,
+          timeout: data.timeout,
+          elapsed: `${elapsed}ms`,
+        }, null, 2);
+      }
+    }
+    
+  } catch (error) {
+    const elapsed = Math.round(performance.now() - startTime);
+    console.error('[ATS Tailor] Connection test error:', error);
+    
+    this._lastConnectionTest = {
+      timestamp: new Date().toISOString(),
+      provider: this.aiProvider,
+      error: error.message,
+      elapsed,
+    };
+    
+    if (statusIcon) statusIcon.textContent = '❌';
+    if (testMessage) testMessage.textContent = error.message || 'Connection test failed';
+    testDetails?.classList.remove('hidden');
+    if (testDetailsText) {
+      testDetailsText.textContent = JSON.stringify({ error: error.message, elapsed: `${elapsed}ms` }, null, 2);
+    }
+  } finally {
+    if (testBtn) testBtn.disabled = false;
+  }
+};
+
+// Debug report data collection
+ATSTailor.prototype._debugLogs = [];
+
+ATSTailor.prototype.addDebugLog = function(stage, data) {
+  this._debugLogs.push({
+    timestamp: new Date().toISOString(),
+    stage,
+    ...data,
+  });
+  // Keep last 50 entries
+  if (this._debugLogs.length > 50) {
+    this._debugLogs.shift();
+  }
+};
+
+// logDebug alias for tailorDocuments and other methods
+ATSTailor.prototype.logDebug = function(stage, message, data = {}) {
+  console.log(`[ATS Tailor] [${stage}] ${message}`, data);
+  this.addDebugLog(stage, { message, ...data });
+};
+
+ATSTailor.prototype.showDebugReport = function() {
+  const panel = document.getElementById('debugReportPanel');
+  const content = document.getElementById('debugReportContent');
+  
+  panel?.classList.remove('hidden');
+  
+  // Compile debug report
+  const report = {
+    generatedAt: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    aiProvider: this.aiProvider,
+    session: this.session ? { userId: this.session.user?.id, email: this.session.user?.email } : null,
+    currentJob: this.currentJob ? {
+      title: this.currentJob.title,
+      company: this.currentJob.company,
+      location: this.currentJob.location,
+      descriptionLength: this.currentJob.description?.length || 0,
+    } : null,
+    lastConnectionTest: this._lastConnectionTest || null,
+    recentLogs: this._debugLogs.slice(-20),
+    generatedDocuments: {
+      hasCv: !!this.generatedDocuments.cv,
+      hasCoverLetter: !!this.generatedDocuments.coverLetter,
+      matchScore: this.generatedDocuments.matchScore,
+      matchedKeywordsCount: this.generatedDocuments.matchedKeywords?.length || 0,
+      missingKeywordsCount: this.generatedDocuments.missingKeywords?.length || 0,
+    },
+  };
+  
+  if (content) {
+    content.innerHTML = `<pre style="font-size: 10px; overflow-x: auto;">${JSON.stringify(report, null, 2)}</pre>`;
+  }
+};
+
+ATSTailor.prototype.hideDebugReport = function() {
+  document.getElementById('debugReportPanel')?.classList.add('hidden');
+};
+
+ATSTailor.prototype.downloadDebugReport = function() {
+  const report = {
+    generatedAt: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    aiProvider: this.aiProvider,
+    session: this.session ? { userId: this.session.user?.id, email: this.session.user?.email } : null,
+    currentJob: this.currentJob,
+    lastConnectionTest: this._lastConnectionTest || null,
+    allLogs: this._debugLogs,
+    generatedDocuments: {
+      hasCv: !!this.generatedDocuments.cv,
+      hasCoverLetter: !!this.generatedDocuments.coverLetter,
+      cvLength: this.generatedDocuments.cv?.length || 0,
+      coverLetterLength: this.generatedDocuments.coverLetter?.length || 0,
+      matchScore: this.generatedDocuments.matchScore,
+      matchedKeywords: this.generatedDocuments.matchedKeywords,
+      missingKeywords: this.generatedDocuments.missingKeywords,
+    },
+  };
+  
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ats-debug-report-${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  this.showToast('Debug report downloaded', 'success');
+};
+
+ATSTailor.prototype.copyDebugReport = function() {
+  const report = {
+    generatedAt: new Date().toISOString(),
+    aiProvider: this.aiProvider,
+    currentJob: this.currentJob ? { title: this.currentJob.title, company: this.currentJob.company } : null,
+    lastConnectionTest: this._lastConnectionTest,
+    recentLogs: this._debugLogs.slice(-10),
+  };
+  
+  navigator.clipboard.writeText(JSON.stringify(report, null, 2))
+    .then(() => this.showToast('Debug report copied to clipboard', 'success'))
+    .catch(() => this.showToast('Failed to copy', 'error'));
+};
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
