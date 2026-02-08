@@ -2684,8 +2684,9 @@ class ATSTailor {
       updateProgress(20, 'Step 2/3: Loading profile & generating tailored CV...');
 
       // Fetch user profile (API call) - includes CV file info
+      // NOTE: Database has professional_experience, NOT work_experience - we map it locally
       const profileRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,cover_letter,professional_experience,work_experience,relevant_projects,education,skills,certifications,achievements,ats_strategy,city,country,address,state,zip_code,cv_file_path,cv_file_name,cv_uploaded_at,preferred_ai_provider`,
+        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=first_name,last_name,email,phone,linkedin,github,portfolio,cover_letter,professional_experience,relevant_projects,education,skills,certifications,achievements,ats_strategy,city,country,address,state,zip_code,cv_file_path,cv_file_name,cv_uploaded_at,preferred_ai_provider`,
         {
           headers: {
             apikey: SUPABASE_ANON_KEY,
